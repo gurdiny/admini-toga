@@ -53,3 +53,4 @@ Thumbs.db
 !.yarn/releases
 !.yarn/versions
 .pnpm-debug.log*
+e2e/screenshots/

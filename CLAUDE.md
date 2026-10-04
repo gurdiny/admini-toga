@@ -12,7 +12,7 @@ El plan completo por fases está en [docs/PLAN.md](docs/PLAN.md). **Trabaja una 
 - [x] Fase 1 — Modelo de datos (Prisma)
 - [x] Fase 2 — Autenticación y roles
 - [x] Fase 3 — Capa de datos, validación y zona horaria
-- [ ] Fase 4 — Módulo de pagos
+- [x] Fase 4 — Módulo de pagos
 - [ ] Fase 5 — Recordatorios / checklist
 - [ ] Fase 6 — Panel de administración
 - [ ] Fase 7 — Reportes, exportación y búsqueda
@@ -101,7 +101,8 @@ npm run db:migrate -- --name xxx       # nueva migración (nunca db push)
 npm run db:generate                    # regenerar cliente tras cambiar el esquema
 npm run db:seed                        # datos de ejemplo (Prisma 7 no lo corre al migrar)
 npm run db:studio                      # explorar la base
-npm test                               # Vitest (fechas, dinero, esquemas, errores)
+npm test                               # Vitest (fechas, dinero, esquemas, errores, permisos, filtros)
+npm run e2e:clean                      # borra datos de las pruebas E2E (ver e2e/README.md)
 npm run lint && npm run typecheck      # antes de cada commit
 npm run build                          # verificar build de producción
 ```
@@ -126,6 +127,8 @@ Variables: [.env.example](.env.example) documenta todas. Se usa el puerto 5433 p
 - **Validación**: piezas compartidas en `src/lib/validation.ts` (`zText`, `zMoney` → string "1250.50", `zDay` → Date, `zOptionalPhone`, `zOptionalFolio`, `zCheckbox`…). Esquemas por módulo en `src/modules/*/schemas.ts`; sirven igual para el formulario (cliente) y la acción (servidor). En Zod 4, un campo opcional se marca con `.optional()`/`.nullish()`; un `union` con `z.undefined()` NO lo hace opcional.
 - **Dinero**: `src/lib/money.ts` (`parseMoney`, `toDecimal`, `sumDecimals`, `formatMXN`, `moneyToString`). Funciona en cliente y servidor. Un `Decimal` no cruza a Client Components: convertir con `moneyToString()`.
 - **Login automático en desarrollo**: con `DEV_AUTO_LOGIN="correo"` en `.env`, `npm run dev` entra solo con ese usuario del seed (pasa por el login real de Better Auth vía `/api/dev/login`). La barra "Dev:" abajo a la derecha cambia de usuario en un clic; `/login?salir=1` muestra el formulario real. Todo está en `src/lib/dev/` y se apaga solo en producción (`NODE_ENV !== "development"`: la ruta da 404 y el proxy manda a `/login`).
+- **Patrón de pantallas** (ver `src/modules/payments/`): `queries.ts` (server-only, devuelve datos serializables: montos string, días `DayKey`), `actions/*.ts` (`defineAction`), `components/` (client). Los diálogos de formulario separan el `Dialog` del `Form` interno: el formulario se monta al abrir y siempre arranca limpio. En formularios `useAction(..., { errorToast: false })` (el error ya se ve dentro). Listados: tarjetas en celular (`md:hidden`) y tabla en escritorio (`hidden md:block`). Filtros en la URL (`filters.ts`). Permisos por fila se calculan en el servidor y se pasan como booleanos.
+- **Pruebas E2E** en `e2e/` con playwright-core y el Chrome de Windows (Chromium no corre en este WSL sin `sudo`). Crean datos con «E2E»; limpiar con `npm run e2e:clean`.
 - Scripts sueltos que importan módulos con `server-only`: `npx tsx --conditions=react-server archivo.ts`.
 - shadcn/ui: estilo `radix-nova`, componentes con `npx shadcn@latest add <componente>`.
 - Para exportar a Excel usar `exceljs`: el paquete `xlsx` publicado en npm está desactualizado y con vulnerabilidades conocidas.

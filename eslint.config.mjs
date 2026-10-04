@@ -14,6 +14,11 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  {
+    // Scripts de Node (CommonJS) de las pruebas E2E.
+    files: ["e2e/**/*.cjs"],
+    rules: { "@typescript-eslint/no-require-imports": "off" },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

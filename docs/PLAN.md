@@ -281,7 +281,7 @@ Una fase por sesión, y no avances hasta que la verificación de esa fase pase. 
 - [x] Fase 1 — Modelo de datos
 - [x] Fase 2 — Autenticación y roles
 - [x] Fase 3 — Capa de datos y zona horaria
-- [ ] Fase 4 — Módulo de pagos
+- [x] Fase 4 — Módulo de pagos
 - [ ] Fase 5 — Checklist
 - [ ] Fase 6 — Panel de administración
 - [ ] Fase 7 — Reportes y búsqueda
