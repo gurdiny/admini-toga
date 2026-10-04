@@ -1,5 +1,5 @@
 const { chromium } = require("playwright-core");
-const { CHROME, B, shots, log } = require("./config.cjs");
+const { CHROME, B, shots, log, pickDay } = require("./config.cjs");
 const money = (text) => Number(text.replace(/[^\d.]/g, ""));
 
 (async () => {
@@ -10,7 +10,7 @@ const money = (text) => Number(text.replace(/[^\d.]/g, ""));
 
   async function registrar({ supplier, amount, concept, day }) {
     await page.getByRole("button", { name: "Registrar pago" }).first().click();
-    const dialog = page.getByRole("dialog");
+    const dialog = page.getByRole("dialog", { name: "Registrar pago" });
     await dialog.getByRole("combobox", { name: "Proveedor" }).click();
     await page.getByPlaceholder("Nombre o código…").fill(supplier);
     await page.getByRole("option", { name: new RegExp(supplier) }).first().click();
@@ -20,7 +20,7 @@ const money = (text) => Number(text.replace(/[^\d.]/g, ""));
     await dialog.getByRole("combobox", { name: "Categoría" }).click();
     await page.getByRole("option", { name: "Mano de obra" }).click();
     if (day === "ayer") await dialog.getByRole("button", { name: "Ayer" }).click();
-    else if (typeof day === "string") await dialog.getByLabel("Fecha del pago").fill(day);
+    else if (typeof day === "string") await pickDay(page, dialog.getByLabel("Fecha del pago"), day);
     await dialog.getByRole("button", { name: "Registrar pago" }).click();
     await dialog.waitFor({ state: "hidden" });
   }
@@ -53,7 +53,7 @@ const money = (text) => Number(text.replace(/[^\d.]/g, ""));
 
     // Proveedor nuevo desde el buscador del formulario
     await page.getByRole("button", { name: "Registrar pago" }).first().click();
-    let dialog = page.getByRole("dialog");
+    let dialog = page.getByRole("dialog", { name: "Registrar pago" });
     await dialog.getByRole("combobox", { name: "Proveedor" }).click();
     await page.getByPlaceholder("Nombre o código…").fill("Orfebrería Nueva E2E");
     await page.getByRole("option", { name: /Dar de alta «Orfebrería Nueva E2E»/ }).click();
@@ -61,7 +61,7 @@ const money = (text) => Number(text.replace(/[^\d.]/g, ""));
     log((await supplierDialog.getByLabel("Nombre").inputValue()) === "Orfebrería Nueva E2E", "Alta en línea con el nombre ya escrito");
     await supplierDialog.getByRole("button", { name: "Dar de alta" }).click();
     await supplierDialog.waitFor({ state: "hidden" });
-    dialog = page.getByRole("dialog");
+    dialog = page.getByRole("dialog", { name: "Registrar pago" });
     log((await dialog.getByRole("combobox", { name: "Proveedor" }).innerText()).includes("Orfebrería Nueva E2E"), "Queda seleccionado en el pago");
     log(await dialog.getByText("Este proveedor no tiene adeudos abiertos.").isVisible(), "Sin adeudos → pago de contado");
     await dialog.getByLabel("Monto").fill("50");
@@ -75,7 +75,7 @@ const money = (text) => Number(text.replace(/[^\d.]/g, ""));
 
     // Errores de validación visibles
     await page.getByRole("button", { name: "Registrar pago" }).first().click();
-    dialog = page.getByRole("dialog");
+    dialog = page.getByRole("dialog", { name: "Registrar pago" });
     await dialog.getByRole("combobox", { name: "Proveedor" }).click();
     await page.getByRole("option", { name: /Taller de Engaste/ }).click();
     await dialog.getByText("Pago de contado", { exact: true }).click();

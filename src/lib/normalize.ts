@@ -1,5 +1,5 @@
 // Normalización de texto capturado a mano. Se usa para las llaves únicas
-// (nameKey, folio, teléfono) y así evitar duplicados por mayúsculas,
+// (nameKey, teléfono) y así evitar duplicados por mayúsculas,
 // acentos o espacios.
 
 /** "  José   PÉREZ " → "jose perez" */
@@ -15,12 +15,6 @@ export function toNameKey(name: string): string {
 /** Limpia espacios repetidos para mostrar: "  José   Pérez " → "José Pérez" */
 export function cleanName(name: string): string {
   return name.replace(/\s+/g, " ").trim();
-}
-
-/** " joy-8492 " → "JOY-8492". Cadena vacía → null. */
-export function normalizeFolio(folio: string | null | undefined): string | null {
-  const value = folio?.replace(/\s+/g, "").toUpperCase();
-  return value ? value : null;
 }
 
 /**

@@ -4,7 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DayInput } from "@/components/form/day-input";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { paymentsHref, type PaymentPageFilters } from "../filters";
 
@@ -64,14 +65,14 @@ export function RangePicker({ filters }: { filters: PaymentPageFilters }) {
             router.push(paymentsHref(filters, { rango: "personalizado", desde: from, hasta: to, pagina: null }));
           }}
         >
-          <label className="space-y-1 text-sm">
-            <span>Desde</span>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-10" required />
-          </label>
-          <label className="space-y-1 text-sm">
-            <span>Hasta</span>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-10" required />
-          </label>
+          <div className="col-span-2 space-y-1 text-sm sm:flex-1">
+            <Label htmlFor="r-from">Desde</Label>
+            <DayInput id="r-from" value={from} onChange={setFrom} shortcuts={[]} />
+          </div>
+          <div className="col-span-2 space-y-1 text-sm sm:flex-1">
+            <Label htmlFor="r-to">Hasta</Label>
+            <DayInput id="r-to" value={to} onChange={setTo} shortcuts={[]} />
+          </div>
           <Button type="submit" className="col-span-2 h-10">
             Ver periodo
           </Button>

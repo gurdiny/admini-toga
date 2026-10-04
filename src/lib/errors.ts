@@ -27,7 +27,6 @@ export class AuthorizationError extends Error {
 const UNIQUE_MESSAGES: Record<string, string> = {
   suppliers_nameKey_key: "Ya existe un proveedor con ese nombre.",
   categories_type_nameKey_key: "Ya existe una categoría con ese nombre.",
-  clients_folio_key: "Ese folio ya está registrado con otro cliente.",
   users_email_key: "Ya existe un usuario con ese correo.",
   app_settings_key_key: "Esa configuración ya existe.",
 };

@@ -158,7 +158,7 @@ function DebtForm({
               <DayInput id="d-date" value={values.date} onChange={(v) => set("date", v)} />
             </Field>
             <Field label="Fecha límite de pago" htmlFor="d-due" error={errors.dueDate} hint="Opcional">
-              <Input id="d-due" type="date" value={values.dueDate} onChange={(e) => set("dueDate", e.target.value)} className="h-11" />
+              <DayInput id="d-due" value={values.dueDate} onChange={(v) => set("dueDate", v)} shortcuts={[]} clearable placeholder="Sin fecha límite" />
             </Field>
           </div>
 

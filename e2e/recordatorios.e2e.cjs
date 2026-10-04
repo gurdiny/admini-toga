@@ -1,7 +1,8 @@
-// Recordatorios en celular (390 px): pestañas, captura con cliente nuevo y
-// existente, checkbox optimista, deshacer, permisos de Mostrador y Dueño.
+// Recordatorios en celular (390 px): pestañas, captura con cliente nuevo
+// (folio automático) y existente, calendario sin días pasados, checkbox
+// optimista, deshacer, ver detalle, permisos de Mostrador y Dueño.
 const { chromium } = require("playwright-core");
-const { CHROME, B, shots, log } = require("./config.cjs");
+const { CHROME, B, shots, log, pickDay } = require("./config.cjs");
 
 const MOBILE = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: "es-MX" };
 /** Día de México con desfase: "2026-10-03" para ayer. */
@@ -30,7 +31,7 @@ const mxDay = (offset) => {
   async function capture(page, { search, pick, newPhone, note, day, time, high }) {
     await ready(page);
     await page.getByRole("button", { name: "Nuevo recordatorio" }).click();
-    const dialog = page.getByRole("dialog");
+    const dialog = page.getByRole("dialog", { name: "Nuevo recordatorio" });
     await dialog.getByPlaceholder("Nombre, folio o teléfono").fill(search);
     if (pick) {
       await dialog.getByRole("button", { name: new RegExp(pick) }).click();
@@ -40,7 +41,7 @@ const mxDay = (offset) => {
     }
     await dialog.getByLabel("¿Qué hay que hacer?").fill(note);
     if (day === "hoy") await dialog.getByRole("button", { name: "Hoy", exact: true }).click();
-    else if (day) await dialog.getByLabel("¿Para cuándo?").fill(day);
+    else if (day) await pickDay(page, dialog.getByLabel("¿Para cuándo?"), day);
     if (time) await dialog.getByLabel("Hora límite").fill(time);
     if (high) await dialog.getByRole("radio", { name: "Alta" }).click();
     return dialog;
@@ -62,9 +63,15 @@ const mxDay = (offset) => {
     // Validación
     let dialog = await (async () => {
       await staff.getByRole("button", { name: "Nuevo recordatorio" }).click();
-      return staff.getByRole("dialog");
+      return staff.getByRole("dialog", { name: "Nuevo recordatorio" });
     })();
-    log((await dialog.getByLabel("¿Para cuándo?").inputValue()) === mxDay(1), "La fecha arranca en mañana (día de México)");
+    log((await dialog.getByRole("button", { name: "Mañana", exact: true }).getAttribute("data-variant")) === "secondary", "La fecha arranca en mañana (día de México)");
+    log((await dialog.getByRole("button", { name: "Ayer", exact: true }).count()) === 0, "Sin atajo «Ayer»");
+    await dialog.getByLabel("¿Para cuándo?").click();
+    log(await staff.locator(`[data-day="${mxDay(-1)}"]`).isDisabled(), "Calendario: ayer no se puede elegir");
+    log(!(await staff.locator(`[data-day="${mxDay(0)}"]`).isDisabled()), "Calendario: hoy sí");
+    await staff.screenshot({ path: shots("e2e-rec-calendario.png") });
+    await staff.keyboard.press("Escape");
     await dialog.getByRole("button", { name: "Guardar recordatorio" }).click();
     await dialog.getByText("Elige un cliente o captura uno nuevo.").waitFor();
     log(await dialog.getByText("Falta la nota.").isVisible(), "Sin cliente ni nota: errores junto a cada campo");
@@ -74,27 +81,32 @@ const mxDay = (offset) => {
     // Cliente nuevo en línea, para hoy, prioridad alta
     dialog = await capture(staff, { search: "Lucía E2E", newPhone: "55 1111 2222", note: "E2E anillo talla 7", day: "hoy", time: "18:30", high: true });
     log((await dialog.getByLabel("Nombre del cliente").inputValue()) === "Lucía E2E", "Alta de cliente en línea con el nombre ya escrito");
+    log((await dialog.getByLabel("Folio").count()) === 0, "No se captura folio");
     await staff.screenshot({ path: shots("e2e-rec-form.png") });
     await save(dialog);
+    const toastText = await staff.getByText(/Cliente nuevo con folio CLI-\d{4}/).innerText();
+    const folio = toastText.match(/CLI-\d{4}/)[0];
+    log(true, `Folio asignado solo: ${folio}`);
 
-    // Cliente existente buscado por folio, con fecha de ayer
-    dialog = await capture(staff, { search: "joy-8492", pick: "María Fernanda López", note: "E2E limpieza de cadena", day: mxDay(-1) });
+    // Cliente existente buscado por folio (cli-1 = CLI-0001), para dentro de 3 días con el calendario
+    dialog = await capture(staff, { search: "cli-1", pick: "María Fernanda López", note: "E2E limpieza de cadena", day: mxDay(3) });
     await save(dialog);
 
     log((await count(staff, "Hoy")) === before.hoy + 1, `Contador «Hoy» +1 → ${await count(staff, "Hoy")}`);
-    log((await count(staff, "Atrasados")) === before.atrasados + 1, "El de ayer cuenta en «Atrasados»");
+    log((await count(staff, "Atrasados")) === before.atrasados, "Nada nuevo en «Atrasados»");
     const atrasadosTab = tabs(staff).getByRole("link", { name: /Atrasados/ });
-    log((await atrasadosTab.getAttribute("class")).includes("text-destructive"), "«Atrasados» se marca en rojo");
+    log(before.atrasados === 0 || (await atrasadosTab.getAttribute("class")).includes("text-destructive"), "«Atrasados» en rojo si tiene pedidos");
 
     const badge = await staff.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: /Recordatorios/ }).innerText();
     log(badge.includes(String((await count(staff, "Hoy")) + (await count(staff, "Atrasados")))), `Globo de la barra inferior = hoy + atrasados (${badge.replace(/\s+/g, " ")})`);
 
-    await openTab(staff, "Atrasados");
-    log(await card(staff, "E2E limpieza de cadena").getByText("JOY-8492").isVisible(), "Atrasados: tarjeta con folio del cliente existente");
+    const later = staff.locator("section", { hasText: "Más adelante" });
+    log(await later.locator("li", { hasText: "E2E limpieza de cadena" }).getByText("CLI-0001").isVisible(), "En 3 días → «Más adelante» bajo Mañana, con folio CLI-0001");
 
     await openTab(staff, "Hoy");
     const a = card(staff, "E2E anillo talla 7");
     log(await a.getByText("Alta", { exact: true }).isVisible(), "Marca de prioridad ALTA");
+    log(await a.getByText(folio).isVisible(), `Tarjeta con su folio ${folio}`);
     log(await a.getByText("antes de las 18:30").isVisible(), "Hora límite visible");
     const wa = await a.getByRole("link", { name: /WhatsApp a Lucía E2E/ }).getAttribute("href");
     log(wa === "https://wa.me/525511112222", `Teléfono abre WhatsApp → ${wa}`);
@@ -130,6 +142,17 @@ const mxDay = (offset) => {
     await openTab(staff, "Hoy");
     log(await card(staff, "E2E anillo talla 7").isVisible(), "«Deshacer» lo regresa a «Hoy»");
 
+    // Ver detalle
+    await card(staff, "E2E anillo talla 7").getByRole("button", { name: "Ver detalle" }).click();
+    const detail = staff.getByRole("dialog", { name: "Lucía E2E" });
+    log(await detail.getByText(`Folio ${folio}`).isVisible(), "Detalle: folio");
+    log(await detail.getByText(/por Mostrador|por .+/).first().isVisible(), "Detalle: quién lo capturó");
+    log((await detail.getByRole("link", { name: "WhatsApp" }).getAttribute("href")) === "https://wa.me/525511112222", "Detalle: botón de WhatsApp");
+    log((await detail.getByRole("link", { name: /55 1111 2222/ }).getAttribute("href")) === "tel:+525511112222", "Detalle: botón para llamar");
+    await staff.screenshot({ path: shots("e2e-rec-detalle.png") });
+    await staff.keyboard.press("Escape");
+    await detail.waitFor({ state: "hidden" });
+
     // El dueño captura uno: el mostrador no puede editarlo ni borrarlo
     await owner.goto(`${B}/api/dev/login?as=dueno@joyeria.local&next=${encodeURIComponent("/recordatorios?vista=hoy")}`);
     dialog = await capture(owner, { search: "lucia e2e", pick: "Lucía E2E", note: "E2E pedido del dueño", day: "hoy" });
@@ -148,17 +171,18 @@ const mxDay = (offset) => {
     await owner.getByRole("alertdialog").waitFor({ state: "hidden" });
     await card(staff, "E2E anillo talla 7").getByRole("checkbox").click(); // página vieja del mostrador
     await staff.getByText("El recordatorio ya no existe. Recarga la página.").waitFor();
-    log((await card(staff, "E2E anillo talla 7").getByRole("checkbox").getAttribute("aria-checked")) === "false", "Error → aviso y el checkbox regresa a sin marcar");
+    // El aviso sale antes de que termine la transición; luego el checkbox regresa.
+    await card(staff, "E2E anillo talla 7").locator('[role=checkbox][aria-checked="false"]').waitFor({ timeout: 3000 });
+    log(true, "Error → aviso y el checkbox regresa a sin marcar");
 
     // Borrar lo propio de hoy con confirmación
-    await staff.goto(`${B}/recordatorios?vista=atrasados`);
+    await staff.goto(`${B}/recordatorios`);
     await ready(staff);
     await card(staff, "E2E limpieza de cadena").getByRole("button", { name: /Opciones/ }).click();
     await staff.getByRole("menuitem", { name: "Borrar" }).click();
     await staff.getByRole("alertdialog").getByRole("button", { name: "Borrar" }).click();
     await card(staff, "E2E limpieza de cadena").waitFor({ state: "detached" });
-    log((await count(staff, "Atrasados")) === before.atrasados, "Mostrador borra lo suyo de hoy → contador regresa");
-    await staff.screenshot({ path: shots("e2e-rec-atrasados.png"), fullPage: true });
+    log(true, "Mostrador borra lo suyo de hoy con confirmación");
   } catch (error) {
     console.log("✗ FALLÓ:", error.message.split("\n")[0]);
     process.exitCode = 1;

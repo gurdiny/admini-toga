@@ -185,10 +185,10 @@ model Supplier {
 
 model Client {
   id        String    @id @default(cuid(2))
+  code      Int       @unique @default(autoincrement()) // folio, se muestra como CLI-0001
   name      String
   nameKey   String // no único: dos clientes pueden llamarse igual
   phone     String? // 10 dígitos, normalizado
-  folio     String?   @unique // en mayúsculas, p. ej. JOY-8492
   notes     String?
   deletedAt DateTime? // al fusionar duplicados, el sobrante se marca aquí
   createdAt DateTime  @default(now())
@@ -197,7 +197,6 @@ model Client {
   reminders OrderReminder[]
 
   @@index([phone])
-  @@index([folio])
   @@index([nameKey])
   @@map("clients")
 }

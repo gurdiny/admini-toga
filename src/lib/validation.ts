@@ -5,7 +5,7 @@
 import { z } from "zod";
 import { addDays, dayToDb, getToday, isDayKey, type DayKey } from "@/lib/date";
 import { parseMoney } from "@/lib/money";
-import { cleanName, normalizeFolio, normalizePhoneMX } from "@/lib/normalize";
+import { cleanName, normalizePhoneMX } from "@/lib/normalize";
 
 // Mensajes genéricos de Zod en español.
 z.config(z.locales.es());
@@ -97,13 +97,6 @@ export const zOptionalPhone = z
     }
     return phone;
   });
-
-/** Folio opcional, en mayúsculas y sin espacios: "joy-8492" → "JOY-8492". */
-export const zOptionalFolio = z
-  .string()
-  .nullish()
-  .transform((value) => normalizeFolio(value))
-  .refine((value) => value === null || value.length <= 30, "El folio no puede pasar de 30 caracteres.");
 
 export const zOptionalEmail = z
   .string()

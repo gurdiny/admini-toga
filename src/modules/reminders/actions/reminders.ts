@@ -10,7 +10,7 @@ import { toNameKey } from "@/lib/normalize";
 import { zId } from "@/lib/validation";
 import type { Prisma } from "@/generated/prisma/client";
 import { findClients } from "../queries";
-import { clientSearchSchema, reminderIdSchema, reminderSchema, toggleReminderSchema } from "../schemas";
+import { clientSearchSchema, reminderDayError, reminderIdSchema, reminderSchema, toggleReminderSchema } from "../schemas";
 
 const REVALIDATE = ["/recordatorios"];
 
@@ -28,22 +28,17 @@ async function resolveClient(tx: Prisma.TransactionClient, data: ReminderData, u
   }
 
   const newClient = data.newClient!;
-  if (newClient.folio) {
-    // El folio es único (también entre fusionados): mejor decir de quién es.
-    const owner = await tx.client.findUnique({ where: { folio: newClient.folio }, select: { name: true, deletedAt: true } });
-    if (owner) {
-      throw new BusinessError(
-        owner.deletedAt
-          ? `El folio ${newClient.folio} ya se usó con un cliente fusionado. Usa otro folio.`
-          : `El folio ${newClient.folio} ya es de ${owner.name}. Búscalo en la lista en vez de darlo de alta.`,
-      );
-    }
-  }
   const client = await tx.client.create({
     data: { ...newClient, nameKey: toNameKey(newClient.name) },
   });
   await recordAudit(tx, { userId, action: "CREATE", entity: "Client", after: client });
   return client.id;
+}
+
+/** Error de campo como los de Zod, para que el formulario lo muestre junto a la fecha. */
+function assertReminderDay(targetDate: Date, previous?: Date) {
+  const message = reminderDayError(targetDate, previous);
+  if (message) throw new z.ZodError([{ code: "custom", path: ["targetDate"], message, input: targetDate }]);
 }
 
 function reminderFields(data: ReminderData, clientId: string) {
@@ -59,11 +54,15 @@ function reminderFields(data: ReminderData, clientId: string) {
 export const createReminder = defineAction(
   { role: "STAFF", schema: reminderSchema, revalidate: REVALIDATE },
   async (data, { user }) => {
+    assertReminderDay(data.targetDate);
     const reminder = await withAudit({ userId: user.id, action: "CREATE", entity: "OrderReminder" }, async (tx) => {
       const clientId = await resolveClient(tx, data, user.id);
-      return tx.orderReminder.create({ data: { ...reminderFields(data, clientId), createdById: user.id } });
+      return tx.orderReminder.create({
+        data: { ...reminderFields(data, clientId), createdById: user.id },
+        include: { client: { select: { code: true } } },
+      });
     });
-    return { id: reminder.id };
+    return { id: reminder.id, clientCode: reminder.client.code, newClient: data.newClient !== null };
   },
 );
 
@@ -80,6 +79,7 @@ export const updateReminder = defineAction(
         const current = await tx.orderReminder.findFirst({ where: { id, deletedAt: null } });
         if (!current) throw new BusinessError("El recordatorio ya no existe. Recarga la página.");
         if (!canEdit(user, current)) throw new BusinessError(EDIT_DENIED_MESSAGE);
+        assertReminderDay(data.targetDate, current.targetDate);
         const clientId = await resolveClient(tx, data, user.id);
         return tx.orderReminder.update({ where: { id }, data: reminderFields(data, clientId) });
       },

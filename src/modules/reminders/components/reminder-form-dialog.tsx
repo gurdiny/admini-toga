@@ -18,7 +18,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAction } from "@/hooks/use-action";
-import { getTomorrow } from "@/lib/date";
+import { formatCode } from "@/lib/codes";
+import { getToday, getTomorrow } from "@/lib/date";
 import { cn } from "@/lib/utils";
 import type { Priority } from "@/generated/prisma/browser";
 import { createReminder, searchClients, updateReminder } from "../actions/reminders";
@@ -56,17 +57,16 @@ export function ReminderFormDialog({ trigger, open, onOpenChange, reminder }: Pr
   );
 }
 
-type NewClient = { name: string; phone: string; folio: string };
+type NewClient = { name: string; phone: string };
 
 /** Lo que se escribió en el buscador se usa para precargar el cliente nuevo. */
 function guessNewClient(search: string): NewClient {
   const text = search.trim();
   const digits = text.replace(/\D/g, "");
   if (digits.length >= 7 && digits.length === text.replace(/[\s()+-]/g, "").length) {
-    return { name: "", phone: text, folio: "" };
+    return { name: "", phone: text };
   }
-  if (/^[a-z]{1,6}-?\d+$/i.test(text)) return { name: "", phone: "", folio: text.toUpperCase() };
-  return { name: text, phone: "", folio: "" };
+  return { name: text, phone: "" };
 }
 
 function ReminderForm({ reminder, onDone }: { reminder?: ReminderFormValues; onDone: () => void }) {
@@ -82,7 +82,12 @@ function ReminderForm({ reminder, onDone }: { reminder?: ReminderFormValues; onD
   const set = <K extends keyof typeof values>(key: K, value: (typeof values)[K]) =>
     setValues((v) => ({ ...v, [key]: value }));
 
-  const create = useAction(createReminder, { errorToast: false, success: "Recordatorio guardado.", onSuccess: onDone });
+  const create = useAction(createReminder, {
+    errorToast: false,
+    success: (saved) =>
+      saved.newClient ? `Recordatorio guardado. Cliente nuevo con folio ${formatCode("client", saved.clientCode)}.` : "Recordatorio guardado.",
+    onSuccess: onDone,
+  });
   const update = useAction(updateReminder, { errorToast: false, success: "Recordatorio actualizado.", onSuccess: onDone });
   const action = isEdit ? update : create;
   const errors = action.fieldErrors;
@@ -131,29 +136,18 @@ function ReminderForm({ reminder, onDone }: { reminder?: ReminderFormValues; onD
                 aria-invalid={!!errors["newClient.name"]}
               />
             </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Teléfono (WhatsApp)" htmlFor="c-phone" error={errors["newClient.phone"]} hint="10 dígitos">
-                <Input
-                  id="c-phone"
-                  type="tel"
-                  inputMode="tel"
-                  value={newClient.phone}
-                  onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })}
-                  className="h-11"
-                  aria-invalid={!!errors["newClient.phone"]}
-                />
-              </Field>
-              <Field label="Folio" htmlFor="c-folio" error={errors["newClient.folio"]} hint="Por ejemplo JOY-8492">
-                <Input
-                  id="c-folio"
-                  value={newClient.folio}
-                  onChange={(e) => setNewClient({ ...newClient, folio: e.target.value })}
-                  autoCapitalize="characters"
-                  className="h-11 uppercase"
-                />
-              </Field>
-            </div>
-            <p className="text-muted-foreground text-sm">Escribe el teléfono o el folio (o los dos) para encontrarlo después.</p>
+            <Field label="Teléfono (WhatsApp)" htmlFor="c-phone" error={errors["newClient.phone"]} hint="10 dígitos. Opcional, pero sirve para avisarle.">
+              <Input
+                id="c-phone"
+                type="tel"
+                inputMode="tel"
+                value={newClient.phone}
+                onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })}
+                className="h-11"
+                aria-invalid={!!errors["newClient.phone"]}
+              />
+            </Field>
+            <p className="text-muted-foreground text-sm">El folio (CLI-0001…) se le asigna solo al guardar y nunca se repite.</p>
           </fieldset>
         ) : (
           <Field label="Cliente" htmlFor="r-client" required error={clientError}>
@@ -197,6 +191,7 @@ function ReminderForm({ reminder, onDone }: { reminder?: ReminderFormValues; onD
               { label: "Hoy", offset: 0 },
               { label: "Mañana", offset: 1 },
             ]}
+            min={getToday()}
             aria-invalid={!!errors.targetDate}
           />
         </Field>
@@ -241,8 +236,7 @@ function ReminderForm({ reminder, onDone }: { reminder?: ReminderFormValues; onD
 }
 
 function ClientDetail({ client }: { client: ClientOption }) {
-  const parts = [client.folio, client.phone && formatPhone(client.phone)].filter(Boolean);
-  if (!parts.length) return null;
+  const parts = [formatCode("client", client.code), client.phone && formatPhone(client.phone)].filter(Boolean);
   return <p className="text-muted-foreground truncate text-sm">{parts.join(" · ")}</p>;
 }
 

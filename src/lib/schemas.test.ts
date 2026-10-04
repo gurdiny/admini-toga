@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { zodFieldErrors } from "@/lib/errors";
 import { addDays, dayToDb, getToday } from "@/lib/date";
 import { debtSchema, paymentSchema, supplierSchema } from "@/modules/payments/schemas";
-import { clientSchema, reminderSchema } from "@/modules/reminders/schemas";
+import { clientSchema, reminderDayError, reminderSchema } from "@/modules/reminders/schemas";
 
 const today = getToday();
 const basePayment = {
@@ -91,11 +91,17 @@ describe("adeudo", () => {
 });
 
 describe("cliente y recordatorio", () => {
-  it("el cliente necesita teléfono o folio", () => {
-    expect(errorsOf(clientSchema.safeParse({ name: "María López" })).phone).toBe(
-      "Escribe el teléfono o el folio del cliente.",
-    );
-    expect(clientSchema.parse({ name: "María López", folio: " joy-8492 " }).folio).toBe("JOY-8492");
+  it("el cliente solo necesita el nombre; el folio no se captura (lo asigna la base)", () => {
+    const client = clientSchema.parse({ name: "  María   López ", folio: "JOY-1" });
+    expect(client).toEqual({ name: "María López", phone: null, notes: null });
+  });
+
+  it("fecha del recordatorio: nunca antes de hoy, salvo dejar la que ya tenía", () => {
+    const yesterday = dayToDb(addDays(today, -1));
+    expect(reminderDayError(dayToDb(today))).toBeNull();
+    expect(reminderDayError(yesterday)).toBe("La fecha no puede ser anterior a hoy.");
+    expect(reminderDayError(yesterday, yesterday)).toBeNull(); // editar uno atrasado sin moverlo
+    expect(reminderDayError(dayToDb(addDays(today, -2)), yesterday)).toBe("La fecha no puede ser anterior a hoy.");
   });
 
   it("nombre de cliente obligatorio", () => {

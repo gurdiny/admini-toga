@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "@/lib/db";
 import { dbToDay, formatForDisplay, type DayKey } from "@/lib/date";
+import { parseCode } from "@/lib/codes";
 import { toNameKey } from "@/lib/normalize";
 import type { Prisma, Priority } from "@/generated/prisma/client";
 import { BUCKETS, placementWhere, type Bucket, type Placement } from "./buckets";
@@ -8,7 +9,8 @@ import { BUCKETS, placementWhere, type Bucket, type Placement } from "./buckets"
 // Todo lo que sale de aquí es serializable (días como "yyyy-MM-dd", instantes
 // ya formateados en hora de México) para pasarlo a Client Components.
 
-export type ClientOption = { id: string; name: string; phone: string | null; folio: string | null };
+/** `code` es el folio: se muestra con formatCode("client", code) → CLI-0001. */
+export type ClientOption = { id: string; code: number; name: string; phone: string | null };
 
 export type ReminderItem = {
   id: string;
@@ -21,9 +23,14 @@ export type ReminderItem = {
   completedAtLabel: string | null;
   completedByName: string | null;
   createdById: string;
+  createdByName: string;
   createdAt: Date;
+  /** "4 oct, 10:15" en hora de México. */
+  createdAtLabel: string;
   client: ClientOption;
 };
+
+const CLIENT_FIELDS = { id: true, code: true, name: true, phone: true } as const;
 
 const ORDER: Record<Placement, Prisma.OrderReminderOrderByWithRelationInput[]> = {
   // Del día: primero los urgentes, luego por hora límite (sin hora, al final).
@@ -41,8 +48,9 @@ export async function getReminders(placement: Placement, now: Date = new Date())
     orderBy: ORDER[placement],
     take: placement === "completados" ? 100 : undefined,
     include: {
-      client: { select: { id: true, name: true, phone: true, folio: true } },
+      client: { select: CLIENT_FIELDS },
       completedBy: { select: { name: true } },
+      createdBy: { select: { name: true } },
     },
   });
   return rows.map((r) => ({
@@ -55,7 +63,9 @@ export async function getReminders(placement: Placement, now: Date = new Date())
     completedAtLabel: r.completedAt ? formatForDisplay(r.completedAt, "d MMM, HH:mm") : null,
     completedByName: r.completedBy?.name ?? null,
     createdById: r.createdById,
+    createdByName: r.createdBy.name,
     createdAt: r.createdAt,
+    createdAtLabel: formatForDisplay(r.createdAt, "d MMM, HH:mm"),
     client: r.client,
   }));
 }
@@ -76,7 +86,7 @@ export async function getReminderBadge(now: Date = new Date()) {
 }
 
 /**
- * Busca clientes por nombre, folio o teléfono. Sin texto, los más recientes.
+ * Busca clientes por nombre, folio (CLI-0003, cli3 o 3) o teléfono. Sin texto, los más recientes.
  * Excluye los fusionados (deletedAt).
  */
 export async function findClients(query: string, take = 8): Promise<ClientOption[]> {
@@ -84,9 +94,10 @@ export async function findClients(query: string, take = 8): Promise<ClientOption
   const where: Prisma.ClientWhereInput = { deletedAt: null };
   if (q) {
     const digits = q.replace(/\D/g, "");
+    const code = parseCode(q, "client");
     where.OR = [
       { nameKey: { contains: toNameKey(q) } },
-      { folio: { contains: q.replace(/\s+/g, "").toUpperCase() } },
+      ...(code !== null ? [{ code }] : []),
       ...(digits.length >= 3 ? [{ phone: { contains: digits } }] : []),
     ];
   }
@@ -94,6 +105,6 @@ export async function findClients(query: string, take = 8): Promise<ClientOption
     where,
     orderBy: q ? { nameKey: "asc" } : { updatedAt: "desc" },
     take,
-    select: { id: true, name: true, phone: true, folio: true },
+    select: CLIENT_FIELDS,
   });
 }

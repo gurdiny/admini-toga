@@ -6,7 +6,7 @@ import "dotenv/config";
 import { hashPassword } from "better-auth/crypto";
 import { db } from "../src/lib/db";
 import { addDays, dayToDb, getToday } from "../src/lib/date";
-import { normalizeFolio, normalizePhoneMX, toNameKey } from "../src/lib/normalize";
+import { normalizePhoneMX, toNameKey } from "../src/lib/normalize";
 import { Prisma } from "../src/generated/prisma/client";
 
 // Contraseña de los usuarios de ejemplo. Solo para desarrollo.
@@ -128,15 +128,15 @@ async function main() {
   }
 
   const clients = [
-    ["María Fernanda López", "55 8765 4321", "JOY-8492"],
-    ["Carlos Méndez", "55 7654 3210", "JOY-8493"],
-    ["Ana Sofía Torres", "55 6543 2109", "JOY-8494"],
-    ["Roberto García", "55 5432 1098", null],
+    ["María Fernanda López", "55 8765 4321"],
+    ["Carlos Méndez", "55 7654 3210"],
+    ["Ana Sofía Torres", "55 6543 2109"],
+    ["Roberto García", "55 5432 1098"],
   ] as const;
   const cli: string[] = [];
-  for (const [name, phone, folio] of clients) {
+  for (const [name, phone] of clients) {
     const client = await db.client.create({
-      data: { name, nameKey: toNameKey(name), phone: normalizePhoneMX(phone), folio: normalizeFolio(folio) },
+      data: { name, nameKey: toNameKey(name), phone: normalizePhoneMX(phone) },
     });
     cli.push(client.id);
   }
