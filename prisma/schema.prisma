@@ -1,5 +1,14 @@
 // Esquema de la base. Todo cambio pasa por `npx prisma migrate dev`, nunca `db push`.
-// Los modelos se definen en la Fase 1 (ver docs/PLAN.md).
+//
+// Convenciones:
+// - Timestamps (createdAt, completedAt, deletedAt…) se guardan en UTC.
+// - Columnas @db.Date (SupplierPayment.date, OrderReminder.targetDate) guardan el
+//   día calendario de México, sin hora. Se calculan con los helpers de src/lib/date.ts.
+// - Montos en Decimal, nunca Float.
+// - Borrado lógico con deletedAt (o isActive en catálogos). Nunca delete físico,
+//   por eso las relaciones usan onDelete: Restrict.
+// - `nameKey` es el nombre normalizado (minúsculas, sin acentos ni espacios dobles):
+//   evita que "Juan", "JUAN" y "juan " cuenten como tres registros distintos.
 
 generator client {
   provider = "prisma-client"
@@ -8,4 +17,263 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum Role {
+  OWNER
+  STAFF
+}
+
+enum CategoryType {
+  SUPPLIER
+  PAYMENT
+}
+
+enum PaymentMethod {
+  EFECTIVO
+  TRANSFERENCIA
+  TARJETA
+  CHEQUE
+}
+
+enum PaymentStatus {
+  ANTICIPO
+  LIQUIDADO
+  PENDIENTE
+}
+
+enum Priority {
+  NORMAL
+  ALTA
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+// ─── Autenticación (Better Auth) ────────────────────────────────────────────
+// Los campos de User, Session, Account y Verification siguen el esquema que
+// Better Auth espera. role e isActive son campos adicionales nuestros.
+
+model User {
+  id            String   @id @default(cuid(2))
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  role          Role     @default(STAFF)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions Session[]
+  accounts Account[]
+
+  paymentsCreated    SupplierPayment[] @relation("PaymentCreatedBy")
+  remindersCreated   OrderReminder[]   @relation("ReminderCreatedBy")
+  remindersCompleted OrderReminder[]   @relation("ReminderCompletedBy")
+  auditLogs          AuditLog[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid(2))
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// Para email + contraseña, Better Auth guarda el hash en `password`
+// con providerId = "credential" y accountId = id del usuario.
+model Account {
+  id                    String    @id @default(cuid(2))
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id @default(cuid(2))
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verifications")
+}
+
+// ─── Catálogos ──────────────────────────────────────────────────────────────
+
+model Category {
+  id        String       @id @default(cuid(2))
+  name      String
+  nameKey   String
+  type      CategoryType
+  color     String       @default("#737373") // hex, para chips y gráficas
+  sortOrder Int          @default(0)
+  isActive  Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  suppliers Supplier[]
+  payments  SupplierPayment[]
+
+  // El mismo nombre puede existir como categoría de proveedor y de pago.
+  @@unique([type, nameKey])
+  @@index([type, isActive, sortOrder])
+  @@map("categories")
+}
+
+model Supplier {
+  id         String   @id @default(cuid(2))
+  name       String
+  nameKey    String   @unique
+  categoryId String?
+  phone      String? // 10 dígitos, normalizado
+  notes      String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  category Category?         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  payments SupplierPayment[]
+
+  @@index([isActive])
+  @@map("suppliers")
+}
+
+model Client {
+  id        String    @id @default(cuid(2))
+  name      String
+  nameKey   String // no único: dos clientes pueden llamarse igual
+  phone     String? // 10 dígitos, normalizado
+  folio     String?   @unique // en mayúsculas, p. ej. JOY-8492
+  notes     String?
+  deletedAt DateTime? // al fusionar duplicados, el sobrante se marca aquí
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  reminders OrderReminder[]
+
+  @@index([phone])
+  @@index([folio])
+  @@index([nameKey])
+  @@map("clients")
+}
+
+// ─── Operación ──────────────────────────────────────────────────────────────
+
+model SupplierPayment {
+  id            String        @id @default(cuid(2))
+  date          DateTime      @db.Date
+  supplierId    String
+  categoryId    String
+  concept       String
+  amount        Decimal       @db.Decimal(12, 2)
+  currency      String        @default("MXN") @db.Char(3)
+  exchangeRate  Decimal?      @db.Decimal(10, 4) // a MXN, solo si currency != MXN
+  paymentMethod PaymentMethod
+  status        PaymentStatus
+  orderId       String? // pedido de cliente al que corresponde el gasto
+  createdById   String
+  deletedAt     DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  supplier  Supplier       @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  category  Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  order     OrderReminder? @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  createdBy User           @relation("PaymentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([date, supplierId])
+  @@index([deletedAt])
+  @@index([categoryId])
+  @@index([orderId])
+  @@map("supplier_payments")
+}
+
+// Pedido de un cliente con fecha compromiso. Es el "pedido" al que se
+// vinculan los pagos a proveedores (SupplierPayment.orderId).
+model OrderReminder {
+  id            String    @id @default(cuid(2))
+  clientId      String
+  targetDate    DateTime  @db.Date
+  targetTime    String? // "HH:mm" hora de México
+  note          String    @db.Text
+  priority      Priority  @default(NORMAL)
+  isCompleted   Boolean   @default(false)
+  completedAt   DateTime?
+  completedById String?
+  createdById   String
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  client      Client            @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  completedBy User?             @relation("ReminderCompletedBy", fields: [completedById], references: [id], onDelete: Restrict)
+  createdBy   User              @relation("ReminderCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  payments    SupplierPayment[]
+
+  @@index([targetDate, isCompleted])
+  @@index([clientId])
+  @@index([deletedAt])
+  @@map("order_reminders")
+}
+
+// ─── Sistema ────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id        String      @id @default(cuid(2))
+  userId    String
+  action    AuditAction
+  entity    String // nombre del modelo, p. ej. "SupplierPayment"
+  entityId  String
+  changes   Json // { before, after } o el diff de campos
+  createdAt DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@index([userId])
+  @@map("audit_logs")
+}
+
+model AppSetting {
+  id        String   @id @default(cuid(2))
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
 }

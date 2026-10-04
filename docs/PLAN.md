@@ -269,8 +269,8 @@ Sobre la sincronía con Google Sheets del plan original: déjala para el final, 
 
 Una fase por sesión, y no avances hasta que la verificación de esa fase pase. La causa más común de que un proyecto así se enrede es pedir tres fases en el mismo mensaje.
 
-- [ ] Fase 0 — Infraestructura
-- [ ] Fase 1 — Modelo de datos
+- [x] Fase 0 — Infraestructura
+- [x] Fase 1 — Modelo de datos
 - [ ] Fase 2 — Autenticación y roles
 - [ ] Fase 3 — Capa de datos y zona horaria
 - [ ] Fase 4 — Módulo de pagos

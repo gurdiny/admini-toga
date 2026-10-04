@@ -9,7 +9,7 @@ El plan completo por fases está en [docs/PLAN.md](docs/PLAN.md). **Trabaja una 
 ## Estado de fases
 
 - [x] Fase 0 — Infraestructura y repositorio
-- [ ] Fase 1 — Modelo de datos (Prisma)
+- [x] Fase 1 — Modelo de datos (Prisma)
 - [ ] Fase 2 — Autenticación y roles
 - [ ] Fase 3 — Capa de datos, validación y zona horaria
 - [ ] Fase 4 — Módulo de pagos
@@ -33,14 +33,15 @@ Al cerrar una fase: marcarla aquí y hacer commit (`feat(fase-N): ...`).
 
 ## Reglas no negociables
 
-1. **Fechas**: se guardan siempre en UTC y se muestran en `America/Mexico_City` (`APP_TIMEZONE`). Nunca usar `new Date()` directo para comparar o clasificar fechas en Server Actions: usar los helpers de `src/lib/date.ts`. "Hoy", "Mañana" y "Atrasados" se calculan en servidor.
+1. **Fechas**: los timestamps (`createdAt`, `completedAt`, `deletedAt`) se guardan en UTC. Las columnas `@db.Date` (`SupplierPayment.date`, `OrderReminder.targetDate`) guardan el **día calendario de México** como medianoche UTC de ese día. Todo se muestra en `America/Mexico_City` (`APP_TIMEZONE`). Nunca usar `new Date()` directo para comparar o clasificar fechas en Server Actions: usar los helpers de `src/lib/date.ts`. "Hoy", "Mañana" y "Atrasados" se calculan en servidor.
 2. **Dinero**: montos como `Decimal` de Prisma (`Decimal(12,2)`), nunca `float`/`number` para sumar. Usar `src/lib/money.ts`. Moneda por defecto MXN, pero el campo `currency` existe desde el inicio.
 3. **Borrado lógico**: todo borrado es `deletedAt = now()`. Nunca `delete` físico. Toda consulta de listados/totales filtra `deletedAt: null`.
 4. **Migraciones**: siempre `npx prisma migrate dev --name <descripcion>`. **Nunca `prisma db push`.**
 5. **Server Actions** siguen siempre este orden: validar con Zod → verificar rol (`requireRole`) → ejecutar → auditar (`withAudit`) → `revalidatePath` → devolver `Result<T>`. No lanzar excepciones hacia el cliente.
-6. **Catálogos administrables**: categorías, proveedores y configuración viven en la base (`Category`, `Supplier`, `AppSetting`), no en enums ni constantes del código.
-7. **Roles**: `OWNER` ve todo; `STAFF` captura pagos y recordatorios pero no ve montos totales ni `/admin`. Ocultar en UI no basta: se valida en servidor.
-8. **Seguridad de rutas**: `proxy.ts` solo redirige a `/login`; nunca es la barrera de seguridad (CVE-2025-29927). La sesión y el rol se verifican en cada layout de servidor y al inicio de cada Server Action.
+6. **Texto capturado a mano** se normaliza con `src/lib/normalize.ts` antes de guardar: `nameKey` (`toNameKey`) es la llave única de proveedores y categorías, el folio va en mayúsculas (`normalizeFolio`) y el teléfono en 10 dígitos (`normalizePhoneMX`). Nunca buscar duplicados por `name`.
+7. **Catálogos administrables**: categorías, proveedores y configuración viven en la base (`Category`, `Supplier`, `AppSetting`), no en enums ni constantes del código.
+8. **Roles**: `OWNER` ve todo; `STAFF` captura pagos y recordatorios pero no ve montos totales ni `/admin`. Ocultar en UI no basta: se valida en servidor.
+9. **Seguridad de rutas**: `proxy.ts` solo redirige a `/login`; nunca es la barrera de seguridad (CVE-2025-29927). La sesión y el rol se verifican en cada layout de servidor y al inicio de cada Server Action.
 
 ## Estructura
 
@@ -87,6 +88,8 @@ npm run lint && npm run typecheck      # antes de cada commit
 npm run build                          # verificar build de producción
 ```
 
+Usuarios del seed (solo desarrollo): `dueno@joyeria.local` (OWNER) y `mostrador@joyeria.local` (STAFF), contraseña `joyeria-dev-2026` (o `SEED_PASSWORD`).
+
 Variables: [.env.example](.env.example) documenta todas. Se usa el puerto 5433 porque 5432 lo ocupa otro contenedor del usuario (pgvector-dev).
 
 ## Notas técnicas
@@ -95,6 +98,8 @@ Variables: [.env.example](.env.example) documenta todas. Se usa el puerto 5433 p
 - Cliente de Prisma: `import { db } from "@/lib/db"`. Tipos y enums desde `@/generated/prisma/client`. Referencias de Prisma 7 en `.claude/skills/prisma-*`.
 - Prisma 7 no carga `.env` solo: `prisma.config.ts` empieza con `import "dotenv/config"`.
 - Next.js 16: antes de escribir código de Next leer la guía correspondiente en `node_modules/next/dist/docs/` (ver AGENTS.md). Tipos globales como `LayoutProps`/`PageProps` se generan con `next typegen`.
+- Better Auth: el hash de contraseña vive en `Account.password` con `providerId = "credential"` y `accountId = user.id`. Las relaciones hacia `User` de datos de negocio usan `onDelete: Restrict` (los usuarios se desactivan, no se borran).
+- `SupplierPayment.orderId` apunta a `OrderReminder`: el recordatorio es el pedido del cliente.
 - shadcn/ui: estilo `radix-nova`, componentes con `npx shadcn@latest add <componente>`.
 - Para exportar a Excel usar `exceljs`: el paquete `xlsx` publicado en npm está desactualizado y con vulnerabilidades conocidas.
 - El modelo `User` debe ser compatible con Better Auth: el hash de la contraseña vive en `Account.password`, no en `User`.
