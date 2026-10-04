@@ -3,6 +3,7 @@ import { cache } from "react";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/config";
+import { AuthorizationError } from "@/lib/errors";
 import type { Role } from "@/generated/prisma/client";
 
 export type CurrentUser = {
@@ -11,14 +12,6 @@ export type CurrentUser = {
   email: string;
   role: Role;
 };
-
-/** Se lanza cuando una Server Action se ejecuta sin sesión o sin el rol requerido. */
-export class AuthorizationError extends Error {
-  constructor(message = "No tienes permiso para hacer esto.") {
-    super(message);
-    this.name = "AuthorizationError";
-  }
-}
 
 /**
  * Usuario de la sesión actual, o null. Se memoriza por request: llamarlo en el

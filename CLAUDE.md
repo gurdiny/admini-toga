@@ -11,7 +11,7 @@ El plan completo por fases está en [docs/PLAN.md](docs/PLAN.md). **Trabaja una 
 - [x] Fase 0 — Infraestructura y repositorio
 - [x] Fase 1 — Modelo de datos (Prisma)
 - [x] Fase 2 — Autenticación y roles
-- [ ] Fase 3 — Capa de datos, validación y zona horaria
+- [x] Fase 3 — Capa de datos, validación y zona horaria
 - [ ] Fase 4 — Módulo de pagos
 - [ ] Fase 5 — Recordatorios / checklist
 - [ ] Fase 6 — Panel de administración
@@ -33,11 +33,11 @@ Al cerrar una fase: marcarla aquí y hacer commit (`feat(fase-N): ...`).
 
 ## Reglas no negociables
 
-1. **Fechas**: los timestamps (`createdAt`, `completedAt`, `deletedAt`) se guardan en UTC. Las columnas `@db.Date` (`SupplierPayment.date`, `OrderReminder.targetDate`) guardan el **día calendario de México** como medianoche UTC de ese día. Todo se muestra en `America/Mexico_City` (`APP_TIMEZONE`). Nunca usar `new Date()` directo para comparar o clasificar fechas en Server Actions: usar los helpers de `src/lib/date.ts`. "Hoy", "Mañana" y "Atrasados" se calculan en servidor.
+1. **Fechas**: los timestamps (`createdAt`, `completedAt`, `deletedAt`) se guardan en UTC. Las columnas `@db.Date` (`SupplierPayment.date`, `OrderReminder.targetDate`) guardan el **día calendario de México** como medianoche UTC de ese día. Todo se muestra en `America/Mexico_City` (`APP_TIMEZONE`). Nunca usar `new Date()` directo para comparar o clasificar fechas: usar `src/lib/date.ts` (`getToday`, `getTomorrow`, `getRange`, `dayRangeWhere`, `startOfDayInTZ`…). En código, un día calendario es `DayKey` ("yyyy-MM-dd"); `zDay` lo entrega ya convertido a `Date` para Prisma. Las funciones de fecha no dependen de la zona horaria de la máquina (probado con 5 zonas). "Hoy", "Mañana" y "Atrasados" se calculan en servidor.
 2. **Dinero**: montos como `Decimal` de Prisma (`Decimal(12,2)`), nunca `float`/`number` para sumar. Usar `src/lib/money.ts`. Moneda por defecto MXN, pero el campo `currency` existe desde el inicio.
 3. **Borrado lógico**: todo borrado es `deletedAt = now()`. Nunca `delete` físico. Toda consulta de listados/totales filtra `deletedAt: null`.
 4. **Migraciones**: siempre `npx prisma migrate dev --name <descripcion>`. **Nunca `prisma db push`.**
-5. **Server Actions** siguen siempre este orden: validar con Zod → verificar rol (`requireRole`) → ejecutar → auditar (`withAudit`) → `revalidatePath` → devolver `Result<T>`. No lanzar excepciones hacia el cliente.
+5. **Server Actions** se escriben con `defineAction()` de `src/lib/action.ts`, que fija el orden: verificar rol (`requireRole`) → validar con Zod → ejecutar (escrituras dentro de `withAudit`) → `revalidatePath` → devolver `Result<T>`. Nunca lanzan hacia el cliente: `toFailure()` de `src/lib/errors.ts` traduce todo a español. Para errores de negocio esperados, lanzar `BusinessError("mensaje para el usuario")`.
 6. **Texto capturado a mano** se normaliza con `src/lib/normalize.ts` antes de guardar: `nameKey` (`toNameKey`) es la llave única de proveedores y categorías, el folio va en mayúsculas (`normalizeFolio`) y el teléfono en 10 dígitos (`normalizePhoneMX`). Nunca buscar duplicados por `name`.
 7. **Catálogos administrables**: categorías, proveedores y configuración viven en la base (`Category`, `Supplier`, `AppSetting`), no en enums ni constantes del código.
 8. **Roles**: `OWNER` ve todo; `STAFF` captura pagos y recordatorios pero no ve montos totales ni `/admin`. Ocultar en UI no basta: se valida en servidor.
@@ -95,6 +95,7 @@ npm run db:migrate -- --name xxx       # nueva migración (nunca db push)
 npm run db:generate                    # regenerar cliente tras cambiar el esquema
 npm run db:seed                        # datos de ejemplo (Prisma 7 no lo corre al migrar)
 npm run db:studio                      # explorar la base
+npm test                               # Vitest (fechas, dinero, esquemas, errores)
 npm run lint && npm run typecheck      # antes de cada commit
 npm run build                          # verificar build de producción
 ```
@@ -116,6 +117,8 @@ Variables: [.env.example](.env.example) documenta todas. Se usa el puerto 5433 p
 - Los CHECK constraints se agregan a mano al final del `migration.sql`; Prisma no los genera ni los detecta como drift.
 - **Auth** (`src/lib/auth/`): `config.ts` (Better Auth, registro deshabilitado, sesión 30 días, sin cookieCache para que desactivar/cambiar rol aplique al instante), `session.ts` (`getCurrentUser`, `requireUser` y `requirePageRole` para layouts/páginas —redirigen—, `requireRole` para Server Actions —lanza `AuthorizationError`—; OWNER pasa cualquier `requireRole`), `actions.ts` (login/logout). Rutas protegidas viven en el grupo `src/app/(app)/`; `/admin` tiene su propio layout con `requirePageRole("OWNER")`.
 - **Auditoría**: toda escritura pasa por `withAudit()` de `src/lib/audit.ts`, que corre la escritura y el `AuditLog` en una sola transacción. Para UPDATE/DELETE pasar `before` para obtener el diff.
+- **Validación**: piezas compartidas en `src/lib/validation.ts` (`zText`, `zMoney` → string "1250.50", `zDay` → Date, `zOptionalPhone`, `zOptionalFolio`, `zCheckbox`…). Esquemas por módulo en `src/modules/*/schemas.ts`; sirven igual para el formulario (cliente) y la acción (servidor). En Zod 4, un campo opcional se marca con `.optional()`/`.nullish()`; un `union` con `z.undefined()` NO lo hace opcional.
+- **Dinero**: `src/lib/money.ts` (`parseMoney`, `toDecimal`, `sumDecimals`, `formatMXN`, `moneyToString`). Funciona en cliente y servidor. Un `Decimal` no cruza a Client Components: convertir con `moneyToString()`.
 - Scripts sueltos que importan módulos con `server-only`: `npx tsx --conditions=react-server archivo.ts`.
 - shadcn/ui: estilo `radix-nova`, componentes con `npx shadcn@latest add <componente>`.
 - Para exportar a Excel usar `exceljs`: el paquete `xlsx` publicado en npm está desactualizado y con vulnerabilidades conocidas.

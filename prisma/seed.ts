@@ -4,21 +4,17 @@
 // todavía no tiene pagos.
 import "dotenv/config";
 import { hashPassword } from "better-auth/crypto";
-import { formatInTimeZone } from "date-fns-tz";
-import { addDays } from "date-fns";
 import { db } from "../src/lib/db";
+import { addDays, dayToDb, getToday } from "../src/lib/date";
 import { normalizeFolio, normalizePhoneMX, toNameKey } from "../src/lib/normalize";
 import { Prisma } from "../src/generated/prisma/client";
-
-const TZ = process.env.APP_TIMEZONE ?? "America/Mexico_City";
 
 // Contraseña de los usuarios de ejemplo. Solo para desarrollo.
 const DEV_PASSWORD = process.env.SEED_PASSWORD ?? "joyeria-dev-2026";
 
 /** Día calendario de México desplazado `offset` días, listo para una columna @db.Date. */
 function mxDay(offset = 0): Date {
-  const today = formatInTimeZone(new Date(), TZ, "yyyy-MM-dd");
-  return addDays(new Date(`${today}T00:00:00.000Z`), offset);
+  return dayToDb(addDays(getToday(), offset));
 }
 
 async function upsertUser(email: string, name: string, role: "OWNER" | "STAFF") {
