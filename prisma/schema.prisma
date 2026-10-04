@@ -54,6 +54,7 @@ enum AuditAction {
   CREATE
   UPDATE
   DELETE
+  RESTORE // sacar de la papelera (deletedAt = null)
 }
 
 // ─── Autenticación (Better Auth) ────────────────────────────────────────────

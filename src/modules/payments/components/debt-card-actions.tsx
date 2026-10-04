@@ -57,6 +57,7 @@ export function DebtCardActions({ debt, supplierId, supplierName, options, defau
           supplierId={supplierId}
           supplierName={supplierName}
           categories={options.paymentCategories}
+          defaultCurrency={options.defaults.currency}
           debt={debt}
         />
       )}

@@ -8,7 +8,7 @@ import { toNameKey } from "@/lib/normalize";
 import type { Prisma } from "@/generated/prisma/client";
 import { supplierSchema, updateSupplierSchema } from "../schemas";
 
-const REVALIDATE = ["/proveedores", "/pagos"];
+const REVALIDATE = ["/proveedores", "/pagos", "/admin/catalogos"];
 
 async function assertSupplierCategory(tx: Prisma.TransactionClient, categoryId: string | null) {
   if (!categoryId) return;

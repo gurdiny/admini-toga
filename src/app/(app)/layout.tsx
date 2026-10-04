@@ -19,7 +19,11 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await requireUser();
   const isOwner = canAdminister(user);
   // Para el botón «+ Registrar pago» de la barra inferior, disponible en todas las pantallas.
-  const [options, settings, reminders] = await Promise.all([getCaptureOptions(), getSettings(), getReminderBadge()]);
+  const settings = await getSettings();
+  const [options, reminders] = await Promise.all([
+    getCaptureOptions(),
+    settings.modules.reminders ? getReminderBadge() : { count: 0, overdue: false },
+  ]);
 
   return (
     <>
@@ -28,7 +32,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           <Link href="/" className="flex items-center" aria-label="Inicio">
             <TogaWordmark priority className="h-6 w-auto" />
           </Link>
-          <TopNav isOwner={isOwner} reminders={reminders} />
+          <TopNav isOwner={isOwner} modules={settings.modules} reminders={reminders} />
           <div className="ml-auto flex items-center gap-2">
             <span className="hidden text-sm md:inline">{user.name}</span>
             <Badge variant="secondary" className={isOwner ? "bg-toga-green-soft text-toga-green-strong" : undefined}>
@@ -47,6 +51,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pt-4 pb-28 md:pt-6 md:pb-10">{children}</main>
       <BottomNav
         isOwner={isOwner}
+        modules={settings.modules}
         reminders={reminders}
         userName={user.name}
         options={options}

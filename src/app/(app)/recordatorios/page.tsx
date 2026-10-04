@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/page-header";
 import { canDelete, canEdit } from "@/lib/auth/permissions";
 import { requireUser } from "@/lib/auth/session";
 import { formatDay, getToday, getTomorrow } from "@/lib/date";
+import { getSettings, requireModule } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { BUCKET_LABELS, BUCKETS, bucketHref, COMPLETED_WINDOW_DAYS, parseBucket, type Bucket } from "@/modules/reminders/buckets";
 import { NewReminderButton } from "@/modules/reminders/components/new-reminder-button";
@@ -38,15 +39,20 @@ const EMPTY: Record<Bucket, { icon: typeof CalendarClock; title: string; descrip
 };
 
 export default async function RemindersPage({ searchParams }: PageProps<"/recordatorios">) {
+  await requireModule("reminders");
   const user = await requireUser();
-  const bucket = parseBucket((await searchParams).vista);
+  const params = await searchParams;
+  const bucket = parseBucket(params.vista);
+  // ?todos=1: Atrasados sin el límite de días de Configuración.
+  const allOverdue = bucket === "atrasados" && params.todos === "1";
   // Un solo «ahora» para toda la página: contadores y listas no se desfasan a medianoche.
   const now = new Date();
 
-  const [counts, items, later] = await Promise.all([
-    getReminderCounts(now),
-    getReminders(bucket, now),
+  const [counts, items, later, settings] = await Promise.all([
+    getReminderCounts(now, { allOverdue }),
+    getReminders(bucket, now, { allOverdue }),
     bucket === "manana" ? getReminders("despues", now) : null,
+    getSettings(),
   ]);
   // Permisos por fila calculados aquí; el cliente solo recibe booleanos.
   const withPermissions = (list: ReminderItem[]): ReminderRow[] =>
@@ -99,6 +105,22 @@ export default async function RemindersPage({ searchParams }: PageProps<"/record
           <EmptyState icon={empty.icon} title={empty.title} description={empty.description} />
         ) : (
           <ReminderList items={withPermissions(items)} showDate={bucket === "atrasados" || bucket === "completados"} />
+        )}
+        {bucket === "atrasados" && (counts.antiguos > 0 || allOverdue) && (
+          <p className="bg-card shadow-toga flex flex-wrap items-center justify-between gap-x-3 rounded-2xl px-4 py-2 text-sm">
+            <span className="text-muted-foreground py-2">
+              {allOverdue
+                ? "Mostrando todos los atrasados."
+                : `${counts.antiguos} pedido${counts.antiguos === 1 ? "" : "s"} de hace más de ${settings.overdueLookbackDays} días no ${counts.antiguos === 1 ? "se muestra" : "se muestran"}.`}
+            </span>
+            <Link
+              href={allOverdue ? bucketHref("atrasados") : `${bucketHref("atrasados")}&todos=1`}
+              scroll={false}
+              className="text-toga-pink-strong inline-flex min-h-10 items-center font-bold"
+            >
+              {allOverdue ? `Solo los últimos ${settings.overdueLookbackDays} días` : "Verlos"}
+            </Link>
+          </p>
         )}
       </section>
 

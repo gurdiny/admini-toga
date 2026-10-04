@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { canAdminister } from "@/lib/auth/permissions";
 import { requireUser } from "@/lib/auth/session";
+import { requireModule } from "@/lib/settings";
 import { formatCode } from "@/lib/codes";
 import { BalanceText } from "@/modules/payments/components/balance-text";
 import { NewSupplierButton } from "@/modules/payments/components/new-supplier-button";
@@ -16,6 +17,7 @@ import { getCaptureOptions, listSuppliers } from "@/modules/payments/queries";
 export const metadata: Metadata = { title: "Proveedores" };
 
 export default async function SuppliersPage({ searchParams }: PageProps<"/proveedores">) {
+  await requireModule("payments");
   const user = await requireUser();
   const params = await searchParams;
   const search = typeof params.q === "string" ? params.q : "";

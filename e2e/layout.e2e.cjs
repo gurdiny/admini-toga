@@ -6,20 +6,43 @@
 const { chromium } = require("playwright-core");
 const { CHROME, B, shots, log } = require("./config.cjs");
 
-const WIDTHS = [360, 390, 600, 768, 1280];
+const WIDTHS = [360, 375, 390, 600, 768, 1280];
 const PAGES = [
   ["inicio", "/"],
   ["recordatorios", "/recordatorios"],
   ["completados", "/recordatorios?vista=completados"],
   ["pagos", "/pagos"],
   ["proveedores", "/proveedores"],
+  ["admin", "/admin"],
+  ["admin-catalogos", "/admin/catalogos"],
+  ["admin-clientes", "/admin/clientes"],
+  ["admin-usuarios", "/admin/usuarios"],
+  ["admin-auditoria", "/admin/auditoria"],
+  ["admin-configuracion", "/admin/configuracion"],
+  ["admin-papelera", "/admin/papelera"],
 ];
 // Diálogos: [nombre, ruta, cómo abrirlo]
 const DIALOGS = [
   ["nuevo-recordatorio", "/recordatorios", (p) => p.getByRole("button", { name: "Nuevo recordatorio" }).locator("visible=true").first().click()],
   ["detalle", "/recordatorios?vista=completados", (p) => p.getByRole("button", { name: "Ver detalle" }).first().click()],
   ["registrar-pago", "/pagos", (p) => p.getByRole("button", { name: "Registrar pago" }).locator("visible=true").first().click()],
+  // Con un proveedor que debe: aparecen adeudos y «Liquidar» (aquí se desbordaba a 375 px).
+  [
+    "registrar-pago-con-adeudo",
+    "/pagos",
+    async (p) => {
+      await p.getByRole("button", { name: "Registrar pago" }).locator("visible=true").first().click();
+      const d = p.getByRole("dialog", { name: "Registrar pago" });
+      await d.getByLabel("Proveedor").fill("Platería");
+      await d.getByRole("button", { name: /^Platería/ }).first().click();
+      await d.getByText(/Abono a ADE-/).first().waitFor();
+      await d.getByLabel("Monto").fill("100");
+    },
+  ],
   ["nuevo-proveedor", "/proveedores", (p) => p.getByRole("button", { name: "Nuevo proveedor" }).locator("visible=true").first().click()],
+  ["nueva-categoria", "/admin/catalogos", (p) => p.getByRole("button", { name: "Nueva categoría" }).click()],
+  ["nuevo-usuario", "/admin/usuarios", (p) => p.getByRole("button", { name: "Nuevo usuario" }).click()],
+  ["filtros-auditoria-calendario", "/admin/auditoria", (p) => p.getByLabel("Desde").click()],
   // Solo en celular: el menú de la barra inferior.
   ["menu", "/", (p) => p.getByRole("button", { name: "Menú" }).click(), { mobileOnly: true }],
 ];
@@ -42,12 +65,22 @@ function audit(mobile) {
   for (const dialog of document.querySelectorAll('[role="dialog"], [role="alertdialog"]')) {
     if (dialog.scrollWidth > dialog.clientWidth + 1) problems.push(`diálogo con scroll horizontal (${dialog.scrollWidth} > ${dialog.clientWidth})`);
   }
-  // Elementos que se salen de la pantalla por la derecha o la izquierda.
-  const root = document.querySelector('[role="dialog"]') ?? document.querySelector("main");
+  // Elementos que se salen de la pantalla (o del panel, si hay un diálogo abierto).
+  const dialogs = document.querySelectorAll('[role="dialog"]');
+  const dialog = dialogs[dialogs.length - 1];
+  const root = dialog ?? document.querySelector("main");
+  const bounds = dialog ? dialog.getBoundingClientRect() : { left: 0, right: vw };
+  // Lo que está dentro de un carril que se desliza a propósito (overflow-x: auto) no cuenta.
+  const inScroller = (el) => {
+    for (let p = el.parentElement; p && p !== root; p = p.parentElement) {
+      if (["auto", "scroll"].includes(getComputedStyle(p).overflowX)) return true;
+    }
+    return false;
+  };
   for (const el of root?.querySelectorAll("*") ?? []) {
-    if (!visible(el) || el.closest("[data-sonner-toaster], nextjs-portal")) continue;
+    if (!visible(el) || el.closest("[data-sonner-toaster], nextjs-portal") || inScroller(el)) continue;
     const r = el.getBoundingClientRect();
-    if (r.right > vw + 1 || r.left < -1) {
+    if (r.right > bounds.right + 1 || r.left < bounds.left - 1) {
       problems.push(`se sale de la pantalla: ${name(el)} (${Math.round(r.left)}→${Math.round(r.right)})`);
       break;
     }

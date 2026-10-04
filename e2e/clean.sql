@@ -15,3 +15,10 @@ DELETE FROM audit_logs WHERE "entityId" IN (
 );
 DELETE FROM order_reminders WHERE note LIKE '%E2E%' OR "clientId" IN (SELECT id FROM clients WHERE name LIKE '%E2E%');
 DELETE FROM clients WHERE name LIKE '%E2E%';
+-- Panel de administración: categorías y usuarios de prueba.
+DELETE FROM audit_logs WHERE "entityId" IN (SELECT id FROM categories WHERE name LIKE '%E2E%');
+DELETE FROM categories WHERE name LIKE '%E2E%';
+DELETE FROM audit_logs WHERE "entityId" IN (SELECT id FROM users WHERE email LIKE '%e2e%') OR "userId" IN (SELECT id FROM users WHERE email LIKE '%e2e%');
+DELETE FROM sessions WHERE "userId" IN (SELECT id FROM users WHERE email LIKE '%e2e%');
+DELETE FROM accounts WHERE "userId" IN (SELECT id FROM users WHERE email LIKE '%e2e%');
+DELETE FROM users WHERE email LIKE '%e2e%';

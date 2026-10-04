@@ -26,9 +26,9 @@ type Props = {
   idleLabel?: string;
   /** «Ningún cliente coincide con…» */
   emptyText: (query: string) => string;
-  /** «Cliente nuevo» / «Nuevo proveedor»; recibe lo escrito. */
-  createLabel: (query: string) => string;
-  onCreate: (query: string) => void;
+  /** «Cliente nuevo» / «Nuevo proveedor»; recibe lo escrito. Sin ellos no hay fila de alta. */
+  createLabel?: (query: string) => string;
+  onCreate?: (query: string) => void;
   loading?: boolean;
   invalid?: boolean;
 };
@@ -110,16 +110,18 @@ export function EntityPicker({
             {text && items.length === 0 && !loading && <li className="text-muted-foreground px-4 py-3 text-sm">{emptyText(text)}</li>}
           </>
         )}
-        <li className="bg-card sticky bottom-0">
-          <button
-            type="button"
-            onClick={() => onCreate(query)}
-            className="text-toga-pink-strong hover:bg-toga-pink-soft flex min-h-12 w-full items-center gap-2 px-4 text-left font-bold"
-          >
-            <Plus className="size-4" aria-hidden />
-            {createLabel(text)}
-          </button>
-        </li>
+        {createLabel && onCreate && (
+          <li className="bg-card sticky bottom-0">
+            <button
+              type="button"
+              onClick={() => onCreate(query)}
+              className="text-toga-pink-strong hover:bg-toga-pink-soft flex min-h-12 w-full items-center gap-2 px-4 text-left font-bold"
+            >
+              <Plus className="size-4" aria-hidden />
+              {createLabel(text)}
+            </button>
+          </li>
+        )}
       </ul>
     </div>
   );

@@ -62,8 +62,9 @@ function DialogContent({
         data-slot="dialog-content"
         className={cn(
           // Celular: panel que sube desde abajo, a todo lo ancho (más fácil con el pulgar).
+          // grid-cols-[minmax(0,1fr)]: un texto largo nunca ensancha el panel (si no, se desliza a los lados).
           // Desde sm: ventana centrada.
-          "fixed z-50 grid w-full gap-4 bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 outline-none",
+          "fixed z-50 grid w-full grid-cols-[minmax(0,1fr)] gap-4 bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 outline-none",
           "inset-x-0 bottom-0 max-h-[92dvh] rounded-t-2xl pb-[calc(1rem+env(safe-area-inset-bottom))] duration-200 data-open:animate-in data-open:slide-in-from-bottom data-closed:animate-out data-closed:slide-out-to-bottom",
           "sm:inset-x-auto sm:bottom-auto sm:top-1/2 sm:left-1/2 sm:max-w-sm sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl sm:pb-4 sm:duration-100 sm:data-open:slide-in-from-bottom-0 sm:data-open:fade-in-0 sm:data-open:zoom-in-95 sm:data-closed:slide-out-to-bottom-0 sm:data-closed:fade-out-0 sm:data-closed:zoom-out-95",
           className

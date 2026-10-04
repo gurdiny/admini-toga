@@ -16,8 +16,11 @@ import type { CaptureOptions } from "@/modules/payments/queries";
 /** Pendientes de hoy + atrasados, para el globo de «Recordatorios». */
 export type ReminderBadge = { count: number; overdue: boolean };
 
+export type Modules = { payments: boolean; reminders: boolean };
+
 type NavProps = {
   isOwner: boolean;
+  modules: Modules;
   reminders: ReminderBadge;
   userName: string;
   options: CaptureOptions;
@@ -32,6 +35,11 @@ const PAYMENTS = { href: "/pagos", label: "Pagos", icon: Wallet } as const;
 const SUPPLIERS = { href: "/proveedores", label: "Proveedores", icon: Truck } as const;
 const MAIN_LINKS = [HOME, REMINDERS, PAYMENTS, SUPPLIERS] as const;
 
+/** Enlaces de los módulos encendidos en Configuración. Proveedores es parte de Pagos. */
+function visibleLinks(modules: Modules) {
+  return MAIN_LINKS.filter((link) => (link === REMINDERS ? modules.reminders : link === PAYMENTS || link === SUPPLIERS ? modules.payments : true));
+}
+
 const ADMIN_LINK = { href: "/admin", label: "Administración", icon: Settings } as const;
 
 function isActive(pathname: string, href: string) {
@@ -39,9 +47,9 @@ function isActive(pathname: string, href: string) {
 }
 
 /** Navegación de escritorio, dentro del encabezado. */
-export function TopNav({ isOwner, reminders }: { isOwner: boolean; reminders: ReminderBadge }) {
+export function TopNav({ isOwner, modules, reminders }: { isOwner: boolean; modules: Modules; reminders: ReminderBadge }) {
   const pathname = usePathname();
-  const links = isOwner ? [...MAIN_LINKS, { ...ADMIN_LINK, label: "Admin" }] : MAIN_LINKS;
+  const links = [...visibleLinks(modules), ...(isOwner ? [{ ...ADMIN_LINK, label: "Admin" }] : [])];
   return (
     <nav className="hidden items-center gap-1 text-sm md:flex" aria-label="Principal">
       {links.map((link) => (
@@ -67,7 +75,7 @@ export function TopNav({ isOwner, reminders }: { isOwner: boolean; reminders: Re
  * registrar un pago desde cualquier pantalla (dentro de un proveedor, ya viene
  * con ese proveedor elegido). Inicio está en «Menú» y en el logo.
  */
-export function BottomNav({ isOwner, reminders, userName, options, defaultMethod, devEmail }: NavProps) {
+export function BottomNav({ isOwner, modules, reminders, userName, options, defaultMethod, devEmail }: NavProps) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const supplierId = pathname.match(/^\/proveedores\/([^/]+)$/)?.[1];
@@ -78,27 +86,32 @@ export function BottomNav({ isOwner, reminders, userName, options, defaultMethod
         className="bg-card/95 shadow-toga fixed inset-x-0 bottom-0 z-40 border-t pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
         aria-label="Principal"
       >
-        <ul className="grid h-16 grid-cols-5 items-center">
-          <TabLink {...REMINDERS} active={isActive(pathname, REMINDERS.href)} badge={reminders} />
-          <TabLink {...PAYMENTS} active={isActive(pathname, PAYMENTS.href)} />
-          <li className="flex justify-center">
-            <PaymentFormDialog
-              key={supplierId ?? "general"}
-              options={options}
-              defaultMethod={defaultMethod}
-              preset={supplierId ? { supplierId } : undefined}
-              trigger={
-                <button
-                  type="button"
-                  aria-label="Registrar pago"
-                  className="bg-toga-pink-strong shadow-toga-sm -mt-6 flex size-14 items-center justify-center rounded-full text-white ring-4 ring-[var(--background)] active:scale-95"
-                >
-                  <Plus className="size-7" strokeWidth={2.5} aria-hidden />
-                </button>
-              }
-            />
-          </li>
-          <TabLink {...SUPPLIERS} active={isActive(pathname, SUPPLIERS.href)} />
+        {/* Columnas según los módulos encendidos: Recordatorios · Pagos · ➕ · Proveedores · Menú. */}
+        <ul className="grid h-16 items-center" style={{ gridTemplateColumns: `repeat(${1 + Number(modules.reminders) + 3 * Number(modules.payments)}, minmax(0, 1fr))` }}>
+          {modules.reminders && <TabLink {...REMINDERS} active={isActive(pathname, REMINDERS.href)} badge={reminders} />}
+          {modules.payments && (
+            <>
+              <TabLink {...PAYMENTS} active={isActive(pathname, PAYMENTS.href)} />
+              <li className="flex justify-center">
+                <PaymentFormDialog
+                  key={supplierId ?? "general"}
+                  options={options}
+                  defaultMethod={defaultMethod}
+                  preset={supplierId ? { supplierId } : undefined}
+                  trigger={
+                    <button
+                      type="button"
+                      aria-label="Registrar pago"
+                      className="bg-toga-pink-strong shadow-toga-sm -mt-6 flex size-14 items-center justify-center rounded-full text-white ring-4 ring-[var(--background)] active:scale-95"
+                    >
+                      <Plus className="size-7" strokeWidth={2.5} aria-hidden />
+                    </button>
+                  }
+                />
+              </li>
+              <TabLink {...SUPPLIERS} active={isActive(pathname, SUPPLIERS.href)} />
+            </>
+          )}
           <li>
             <button
               type="button"
@@ -122,7 +135,7 @@ export function BottomNav({ isOwner, reminders, userName, options, defaultMethod
             <DialogDescription>{isOwner ? "Dueño" : "Mostrador"}</DialogDescription>
           </DialogHeader>
           <ul className="divide-y rounded-2xl border">
-            {[...MAIN_LINKS, ...(isOwner ? [ADMIN_LINK] : [])].map(({ href, label, icon: Icon }) => (
+            {[...visibleLinks(modules), ...(isOwner ? [ADMIN_LINK] : [])].map(({ href, label, icon: Icon }) => (
               <li key={href}>
                 <Link
                   href={href}

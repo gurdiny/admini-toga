@@ -51,8 +51,12 @@ export function bucketHref(bucket: Bucket): string {
  * Filtro de Prisma (OrderReminder) para cada lugar. Siempre excluye los
  * borrados. `targetDate` es @db.Date: se compara contra medianoche UTC del
  * día de México (dayToDb).
+ *
+ * `overdueDays` (Configuración → días en Atrasados) limita «Atrasados» a los
+ * últimos N días; lo más viejo queda en «antiguos» (se avisa y se puede ver).
+ * null = sin límite.
  */
-export function placementWhere(placement: Placement, now: Date = new Date()) {
+export function placementWhere(placement: Placement | "antiguos", now: Date = new Date(), overdueDays: number | null = null) {
   const today = getToday(now);
   const pending = { deletedAt: null, isCompleted: false } as const;
   switch (placement) {
@@ -61,7 +65,13 @@ export function placementWhere(placement: Placement, now: Date = new Date()) {
     case "hoy":
       return { ...pending, targetDate: dayToDb(today) };
     case "atrasados":
-      return { ...pending, targetDate: { lt: dayToDb(today) } };
+      return {
+        ...pending,
+        targetDate: { lt: dayToDb(today), ...(overdueDays && { gte: dayToDb(addDays(today, -overdueDays)) }) },
+      };
+    case "antiguos":
+      // Sin límite configurado no hay «antiguos»: todo está en Atrasados.
+      return { ...pending, targetDate: { lt: overdueDays ? dayToDb(addDays(today, -overdueDays)) : dayToDb("2000-01-01") } };
     case "despues":
       return { ...pending, targetDate: { gt: dayToDb(getTomorrow(now)) } };
     case "completados":

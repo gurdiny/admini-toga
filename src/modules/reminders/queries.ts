@@ -46,10 +46,18 @@ const ORDER: Record<Placement, Prisma.OrderReminderOrderByWithRelationInput[]> =
   completados: [{ completedAt: "desc" }],
 };
 
-export async function getReminders(placement: Placement, now: Date = new Date()): Promise<ReminderItem[]> {
+/** Días que muestra «Atrasados» (Configuración). `allOverdue` lo ignora. */
+async function overdueDays(allOverdue = false): Promise<number | null> {
+  if (allOverdue) return null;
+  const { overdueLookbackDays } = await getSettings();
+  return overdueLookbackDays > 0 ? overdueLookbackDays : null;
+}
+
+export async function getReminders(placement: Placement, now: Date = new Date(), { allOverdue = false } = {}): Promise<ReminderItem[]> {
+  const days = await overdueDays(allOverdue);
   const [rows, settings] = await Promise.all([
     db.orderReminder.findMany({
-      where: placementWhere(placement, now),
+      where: placementWhere(placement, now, days),
       orderBy: ORDER[placement],
       take: placement === "completados" ? 100 : undefined,
       include: {
@@ -78,14 +86,22 @@ export async function getReminders(placement: Placement, now: Date = new Date())
   }));
 }
 
-/** Contador de cada pestaña. */
-export async function getReminderCounts(now: Date = new Date()): Promise<Record<Bucket, number>> {
-  const counts = await Promise.all(BUCKETS.map((bucket) => db.orderReminder.count({ where: placementWhere(bucket, now) })));
-  return Object.fromEntries(BUCKETS.map((bucket, i) => [bucket, counts[i]])) as Record<Bucket, number>;
+/** Contador de cada pestaña, más los atrasados que quedan fuera del límite de días. */
+export async function getReminderCounts(
+  now: Date = new Date(),
+  { allOverdue = false } = {},
+): Promise<Record<Bucket, number> & { antiguos: number }> {
+  const days = await overdueDays(allOverdue);
+  const places = [...BUCKETS, "antiguos"] as const;
+  const counts = await Promise.all(places.map((place) => db.orderReminder.count({ where: placementWhere(place, now, days) })));
+  return Object.fromEntries(places.map((place, i) => [place, place === "antiguos" && !days ? 0 : counts[i]])) as Record<Bucket, number> & {
+    antiguos: number;
+  };
 }
 
 /** Globo de la navegación: pendientes de hoy y atrasados. */
 export async function getReminderBadge(now: Date = new Date()) {
+  // El globo cuenta todos los atrasados, aunque Atrasados muestre solo los últimos N días.
   const [today, overdue] = await Promise.all([
     db.orderReminder.count({ where: placementWhere("hoy", now) }),
     db.orderReminder.count({ where: placementWhere("atrasados", now) }),

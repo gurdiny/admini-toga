@@ -4,6 +4,7 @@ import { dbToDay, dayRangeWhere, type DayKey, type DayRange } from "@/lib/date";
 import { moneyToString, toDecimal, ZERO, type Decimal } from "@/lib/money";
 import { toNameKey } from "@/lib/normalize";
 import { parseCode } from "@/lib/codes";
+import { getSettings } from "@/lib/settings";
 import type { PaymentMethod, Prisma } from "@/generated/prisma/client";
 
 // Todo lo que sale de aquí es serializable (montos como string "1250.00",
@@ -457,7 +458,7 @@ export async function getPaymentsSummary(range: DayRange): Promise<PaymentsSumma
 // ─── Opciones para formularios ─────────────────────────────────────────────
 
 export async function getCaptureOptions() {
-  const [suppliers, paymentCategories, supplierCategories] = await Promise.all([
+  const [suppliers, paymentCategories, supplierCategories, settings] = await Promise.all([
     db.supplier.findMany({
       where: { isActive: true },
       orderBy: { nameKey: "asc" },
@@ -473,8 +474,11 @@ export async function getCaptureOptions() {
       orderBy: [{ sortOrder: "asc" }, { nameKey: "asc" }],
       select: { id: true, name: true, color: true },
     }),
+    getSettings(),
   ]);
-  return { suppliers, paymentCategories, supplierCategories };
+  // Valores por defecto de /admin/configuracion para los formularios de captura.
+  const defaults = { currency: settings.defaultCurrency, paymentMethod: settings.defaultPaymentMethod };
+  return { suppliers, paymentCategories, supplierCategories, defaults };
 }
 
 export type CaptureOptions = Awaited<ReturnType<typeof getCaptureOptions>>;

@@ -15,6 +15,7 @@ npm run dev                         # en otra terminal, con DEV_AUTO_LOGIN en .e
 "/mnt/c/Program Files/nodejs/node.exe" "$(wslpath -w e2e/proveedores.e2e.cjs)"
 "/mnt/c/Program Files/nodejs/node.exe" "$(wslpath -w e2e/pagos.e2e.cjs)"
 "/mnt/c/Program Files/nodejs/node.exe" "$(wslpath -w e2e/recordatorios.e2e.cjs)"   # en celular (390 px)
+"/mnt/c/Program Files/nodejs/node.exe" "$(wslpath -w e2e/admin.e2e.cjs)"           # panel de administración (dueño y mostrador)
 "/mnt/c/Program Files/nodejs/node.exe" "$(wslpath -w e2e/layout.e2e.cjs)"          # diseño en 5 anchos: sin desbordes, áreas táctiles ≥ 40 px
 ```
 

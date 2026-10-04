@@ -47,6 +47,16 @@ describe("placementWhere", () => {
     expect(placementWhere("despues", lateNight)).toMatchObject({ targetDate: { gt: dayToDb("2026-10-05") } });
   });
 
+  it("Atrasados con límite de días: lo más viejo pasa a «antiguos», no se pierde", () => {
+    expect(placementWhere("atrasados", lateNight, 30)).toMatchObject({
+      targetDate: { lt: dayToDb("2026-10-04"), gte: dayToDb("2026-09-04") },
+    });
+    expect(placementWhere("antiguos", lateNight, 30)).toMatchObject({ isCompleted: false, targetDate: { lt: dayToDb("2026-09-04") } });
+    // Sin límite: Atrasados no tiene piso.
+    expect(placementWhere("atrasados", lateNight, null)).toMatchObject({ targetDate: { lt: dayToDb("2026-10-04") } });
+    expect(placementWhere("atrasados", lateNight, null)).not.toHaveProperty("targetDate.gte");
+  });
+
   it("completados: últimos 30 días desde la medianoche de México", () => {
     const where = placementWhere("completados", lateNight);
     expect(where).toMatchObject({ deletedAt: null, isCompleted: true });

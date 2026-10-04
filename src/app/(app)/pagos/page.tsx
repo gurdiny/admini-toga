@@ -12,7 +12,7 @@ import { requireUser } from "@/lib/auth/session";
 import { formatCode } from "@/lib/codes";
 import { formatDay } from "@/lib/date";
 import { formatMoney, formatMXN } from "@/lib/money";
-import { getSettings } from "@/lib/settings";
+import { getSettings, requireModule } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { BalanceText } from "@/modules/payments/components/balance-text";
 import { NewPaymentButton } from "@/modules/payments/components/new-payment-button";
@@ -34,6 +34,7 @@ export const metadata: Metadata = { title: "Pagos" };
 const RANGE_LABEL = { hoy: "hoy", semana: "esta semana", mes: "este mes", personalizado: "el periodo" } as const;
 
 export default async function PaymentsPage({ searchParams }: PageProps<"/pagos">) {
+  await requireModule("payments");
   const user = await requireUser();
   const filters = parsePaymentFilters(await searchParams);
   const showTotals = canViewTotals(user);

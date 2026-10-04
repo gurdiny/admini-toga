@@ -10,7 +10,7 @@ import { requireUser } from "@/lib/auth/session";
 import { formatCode } from "@/lib/codes";
 import { formatDay, getToday } from "@/lib/date";
 import { formatMoney } from "@/lib/money";
-import { getSettings } from "@/lib/settings";
+import { getSettings, requireModule } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { BalanceText } from "@/modules/payments/components/balance-text";
 import { DebtCardActions } from "@/modules/payments/components/debt-card-actions";
@@ -31,6 +31,7 @@ export async function generateMetadata({ params }: PageProps<"/proveedores/[id]"
 }
 
 export default async function SupplierPage({ params }: PageProps<"/proveedores/[id]">) {
+  await requireModule("payments");
   const user = await requireUser();
   const { id } = await params;
   const supplier = await getSupplier(id);

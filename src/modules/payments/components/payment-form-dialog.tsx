@@ -101,13 +101,13 @@ function PaymentForm({
     categoryId: payment?.categoryId ?? "",
     concept: payment?.concept ?? "",
     amount: payment?.amount ?? "",
-    currency: payment?.currency ?? "MXN",
+    currency: payment?.currency ?? options.defaults.currency,
     exchangeRate: payment?.exchangeRate ?? "",
     paymentMethod: payment?.paymentMethod ?? defaultMethod,
     date: payment?.date ?? getToday(),
   });
   const [values, setValues] = useState<Values>(initial);
-  const [showCurrency, setShowCurrency] = useState(() => (payment?.currency ?? "MXN") !== "MXN");
+  const [showCurrency, setShowCurrency] = useState(() => (payment?.currency ?? options.defaults.currency) !== "MXN");
   const set = <K extends keyof Values>(key: K, value: Values[K]) => setValues((v) => ({ ...v, [key]: value }));
 
   // Proveedores: los del servidor + los creados aquí mismo.

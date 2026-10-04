@@ -41,6 +41,7 @@ export function SupplierHeaderActions({ supplier, options, defaultMethod, canTog
             supplierId={supplier.id}
             supplierName={supplier.name}
             categories={options.paymentCategories}
+            defaultCurrency={options.defaults.currency}
             trigger={
               <Button variant="outline">
                 <Plus aria-hidden />

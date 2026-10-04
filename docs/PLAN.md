@@ -283,7 +283,7 @@ Una fase por sesión, y no avances hasta que la verificación de esa fase pase. 
 - [x] Fase 3 — Capa de datos y zona horaria
 - [x] Fase 4 — Módulo de pagos
 - [x] Fase 5 — Checklist
-- [ ] Fase 6 — Panel de administración
+- [x] Fase 6 — Panel de administración
 - [ ] Fase 7 — Reportes y búsqueda
 - [ ] Fase 8 — Deploy y respaldos
 

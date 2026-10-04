@@ -39,6 +39,8 @@ export type DebtFormValues = {
 };
 
 type Props = {
+  /** Moneda de /admin/configuracion para adeudos nuevos. */
+  defaultCurrency?: string;
   supplierId: string;
   supplierName: string;
   categories: { id: string; name: string }[];
@@ -68,6 +70,7 @@ function DebtForm({
   supplierName,
   categories,
   debt,
+  defaultCurrency = "MXN",
   onDone,
 }: Omit<Props, "trigger" | "open" | "onOpenChange"> & { onDone: () => void }) {
   const isEdit = Boolean(debt);
@@ -75,14 +78,14 @@ function DebtForm({
     date: debt?.date ?? (getToday() as string),
     description: debt?.description ?? "",
     amount: debt?.amount ?? "",
-    currency: debt?.currency ?? "MXN",
+    currency: debt?.currency ?? defaultCurrency,
     categoryId: debt?.categoryId ?? NONE,
     dueDate: debt?.dueDate ?? "",
     supplierRef: debt?.supplierRef ?? "",
     notes: debt?.notes ?? "",
   });
   const [values, setValues] = useState(initial);
-  const [showCurrency, setShowCurrency] = useState(() => (debt?.currency ?? "MXN") !== "MXN");
+  const [showCurrency, setShowCurrency] = useState(() => (debt?.currency ?? defaultCurrency) !== "MXN");
   const set = <K extends keyof typeof values>(key: K, value: (typeof values)[K]) =>
     setValues((current) => ({ ...current, [key]: value }));
 
