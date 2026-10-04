@@ -14,6 +14,7 @@ Chrome de Windows:
 npm run dev                         # en otra terminal, con DEV_AUTO_LOGIN en .env
 "/mnt/c/Program Files/nodejs/node.exe" "$(wslpath -w e2e/proveedores.e2e.cjs)"
 "/mnt/c/Program Files/nodejs/node.exe" "$(wslpath -w e2e/pagos.e2e.cjs)"
+"/mnt/c/Program Files/nodejs/node.exe" "$(wslpath -w e2e/recordatorios.e2e.cjs)"   # en celular (390 px)
 ```
 
 Variables opcionales: `E2E_BASE_URL` (por defecto `http://localhost:3000`) y

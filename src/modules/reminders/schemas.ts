@@ -51,3 +51,9 @@ export const toggleReminderSchema = z.object({
 
 export type ClientInput = z.input<typeof clientSchema>;
 export type ReminderInput = z.input<typeof reminderSchema>;
+
+export const reminderIdSchema = z.object({ id: zId("El recordatorio") });
+
+export const clientSearchSchema = z.object({
+  q: z.string().max(80).default(""),
+});

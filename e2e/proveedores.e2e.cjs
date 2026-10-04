@@ -9,6 +9,7 @@ const balance = async (page) => (await page.locator("#saldo + span").innerText()
   try {
     // ── Mostrador da de alta un proveedor que ya le debe ──
     await page.goto(`${B}/api/dev/login?as=mostrador@joyeria.local&next=/proveedores`);
+    await page.waitForLoadState("networkidle"); // que React hidrate antes de hacer clic
     log((await page.getByText("Mostrador", { exact: true }).count()) > 0, "Entra como Mostrador");
     await page.getByRole("button", { name: "Nuevo proveedor" }).first().click();
     await page.getByLabel("Nombre").fill("Joyería Prueba E2E");
@@ -79,6 +80,7 @@ const balance = async (page) => (await page.locator("#saldo + span").innerText()
 
     // ── Permisos sobre registros de otros / de días anteriores ──
     await page.goto(`${B}/proveedores`);
+    await page.waitForLoadState("networkidle"); // que React hidrate antes de hacer clic
     await page.getByRole("link", { name: /Platería Taxco Hernández/ }).click();
     await page.getByRole("heading", { name: "Platería Taxco Hernández" }).waitFor();
     const menus = await page.getByRole("button", { name: /Opciones de PAG-/ }).count();
@@ -86,6 +88,7 @@ const balance = async (page) => (await page.locator("#saldo + span").innerText()
 
     // ── Dueño ──
     await page.goto(`${B}/api/dev/login?as=dueno@joyeria.local&next=/proveedores`);
+    await page.waitForLoadState("networkidle"); // que React hidrate antes de hacer clic
     await page.getByRole("link", { name: /Platería Taxco Hernández/ }).click();
     await page.getByRole("heading", { name: "Platería Taxco Hernández" }).waitFor();
     log((await page.getByRole("button", { name: /Opciones de PAG-/ }).count()) === 3, "Dueño puede tocar los 3 pagos");

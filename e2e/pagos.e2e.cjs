@@ -27,6 +27,7 @@ const money = (text) => Number(text.replace(/[^\d.]/g, ""));
 
   try {
     await page.goto(`${B}/api/dev/login?as=dueno@joyeria.local&next=/pagos`);
+    await page.waitForLoadState("networkidle"); // que React hidrate antes de hacer clic
     await page.getByRole("link", { name: "Esta semana" }).waitFor();
     const before = money(await kpi("Pagado esta semana"));
     const countBefore = Number(await kpi("Cantidad de pagos"));
@@ -38,6 +39,7 @@ const money = (text) => Number(text.replace(/[^\d.]/g, ""));
     await registrar({ supplier: "Taller de Engaste", amount: 200, concept: "E2E pago de ayer", day: "ayer" });
     await registrar({ supplier: "Taller de Engaste", amount: 400, concept: "E2E pago fuera de semana", day: tenDaysAgo });
     await page.reload();
+    await page.waitForLoadState("networkidle"); // que React hidrate antes de hacer clic
     const after = money(await kpi("Pagado esta semana"));
     log(Math.abs(after - before - 300) < 0.001, `«Esta semana» suma hoy + ayer (+$300) y excluye el de hace 10 días → $${after}`);
     log(Number(await kpi("Cantidad de pagos")) === countBefore + 2, "Cantidad de pagos +2");
@@ -46,6 +48,7 @@ const money = (text) => Number(text.replace(/[^\d.]/g, ""));
     await page.waitForURL(/rango=hoy/);
     log(await page.locator("table").getByText("E2E pago de hoy").isVisible() && (await page.getByText("E2E pago de ayer").count()) === 0, "«Hoy» muestra solo el de hoy; la URL guarda el filtro (?rango=hoy)");
     await page.reload();
+    await page.waitForLoadState("networkidle"); // que React hidrate antes de hacer clic
     log(await page.getByRole("link", { name: "Hoy" }).getAttribute("aria-current") === "true", "Al recargar sigue en «Hoy»");
 
     // Proveedor nuevo desde el buscador del formulario
@@ -84,6 +87,7 @@ const money = (text) => Number(text.replace(/[^\d.]/g, ""));
     // Buscar y ordenar
     // «E2E p» encuentra solo los pagos de esta prueba (no los de proveedores.e2e.cjs).
     await page.goto(`${B}/pagos?rango=semana&q=E2E+p&orden=amount&dir=asc`);
+    await page.waitForLoadState("networkidle"); // que React hidrate antes de hacer clic
     const concepts = await page.locator("table tbody tr td:nth-child(3) span.block").allInnerTexts();
     log(concepts.join("|") === "E2E primer pago|E2E pago de hoy|E2E pago de ayer", `Buscar «E2E p» + ordenar por monto ↑ → ${concepts.join(", ")}`);
 
@@ -97,6 +101,7 @@ const money = (text) => Number(text.replace(/[^\d.]/g, ""));
 
     // Mostrador: sin totales
     await page.goto(`${B}/api/dev/login?as=mostrador@joyeria.local&next=/pagos`);
+    await page.waitForLoadState("networkidle"); // que React hidrate antes de hacer clic
     await page.getByRole("link", { name: "Esta semana" }).waitFor();
     log((await page.getByText("Pagado esta semana").count()) === 0 && (await page.getByText("Por categoría").count()) === 0, "Mostrador no ve totales ni desgloses");
     log(await page.locator("table").getByText("E2E pago de hoy").isVisible(), "Mostrador sí ve la lista con montos");

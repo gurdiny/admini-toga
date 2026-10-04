@@ -13,7 +13,7 @@ El plan completo por fases está en [docs/PLAN.md](docs/PLAN.md). **Trabaja una 
 - [x] Fase 2 — Autenticación y roles
 - [x] Fase 3 — Capa de datos, validación y zona horaria
 - [x] Fase 4 — Módulo de pagos (rediseño mobile first incluido)
-- [ ] Fase 5 — Recordatorios / checklist
+- [x] Fase 5 — Recordatorios / checklist
 - [ ] Fase 6 — Panel de administración
 - [ ] Fase 7 — Reportes, exportación y búsqueda
 - [ ] Fase 8 — Deploy, respaldos y operación
@@ -58,7 +58,7 @@ Tokens en `src/app/globals.css` (tomados de toga.mx, tema WordPress + WooCommerc
 - **Acción principal**: `<Button variant="brand">` = rosa TOGA en píldora (`#c23d73`, texto blanco 5:1). El rosa original `#d67da1` solo para íconos/acentos (2.9:1, no lleva texto). Botones secundarios negros/outline. Todos los botones son píldora (`rounded-full`) y de al menos 40 px de alto.
 - **Verde** (`toga-green`) para estados positivos y "Al corriente"; como texto `text-toga-green-strong`. **Rojo** `#aa3a3e` = `destructive`.
 - Tarjetas: `bg-card shadow-toga rounded-2xl` (sombra suave de toga.mx), sin bordes duros. Fondo `#f5f5f5`.
-- **Navegación celular**: barra inferior como la de toga.mx (Inicio · Pagos · ➕ · Proveedores · Menú). El ➕ rosa registra un pago desde cualquier pantalla (dentro de `/proveedores/[id]` ya trae el proveedor). Admin, cerrar sesión y el cambio de usuario de desarrollo están en «Menú».
+- **Navegación celular**: barra inferior como la de toga.mx (Recordatorios · Pagos · ➕ · Proveedores · Menú). El ➕ rosa registra un pago desde cualquier pantalla (dentro de `/proveedores/[id]` ya trae el proveedor). Inicio, Admin, cerrar sesión y el cambio de usuario de desarrollo están en «Menú» (el logo también lleva a Inicio). «Recordatorios» lleva un globo con pendientes de hoy + atrasados (rojo si hay atrasados).
 - **Diálogos**: en celular son paneles que suben desde abajo con el botón de guardar pegado abajo; desde `sm` son ventanas centradas.
 - Tipografía: Neulis Neue (texto, 400/700) y Neulis Sans Bold (h1–h3), auto-hospedadas en `src/app/fonts/`.
 - Logo: `TogaLogo` y `TogaWordmark` en `src/components/brand/`. Favicon en `src/app/icon.png`.
@@ -135,7 +135,8 @@ Variables: [.env.example](.env.example) documenta todas. Se usa el puerto 5433 p
 - **Dinero**: `src/lib/money.ts` (`parseMoney`, `toDecimal`, `sumDecimals`, `formatMXN`, `moneyToString`). Funciona en cliente y servidor. Un `Decimal` no cruza a Client Components: convertir con `moneyToString()`.
 - **Login automático en desarrollo**: con `DEV_AUTO_LOGIN="correo"` en `.env`, `npm run dev` entra solo con ese usuario del seed (pasa por el login real de Better Auth vía `/api/dev/login`). La barra "Dev:" abajo a la derecha cambia de usuario en un clic; `/login?salir=1` muestra el formulario real. Todo está en `src/lib/dev/` y se apaga solo en producción (`NODE_ENV !== "development"`: la ruta da 404 y el proxy manda a `/login`).
 - **Patrón de pantallas** (ver `src/modules/payments/`): `queries.ts` (server-only, devuelve datos serializables: montos string, días `DayKey`), `actions/*.ts` (`defineAction`), `components/` (client). Los diálogos de formulario separan el `Dialog` del `Form` interno: el formulario se monta al abrir y siempre arranca limpio. En formularios `useAction(..., { errorToast: false })` (el error ya se ve dentro). Listados: tarjetas en celular (`md:hidden`) y tabla en escritorio (`hidden md:block`). Filtros en la URL (`filters.ts`). Permisos por fila se calculan en el servidor y se pasan como booleanos.
-- **Pruebas E2E** en `e2e/` con playwright-core y el Chrome de Windows (Chromium no corre en este WSL sin `sudo`). Crean datos con «E2E»; limpiar con `npm run e2e:clean`.
+- **Pruebas E2E** en `e2e/` con playwright-core y el Chrome de Windows (Chromium no corre en este WSL sin `sudo`). Crean datos con «E2E»; limpiar con `npm run e2e:clean`. Tras cada `goto`/`reload` esperar `waitForLoadState("networkidle")`: un clic antes de que React hidrate se pierde.
+- **Recordatorios** (`src/modules/reminders/`): la pestaña se decide en `buckets.ts` (`placementWhere`, `classifyReminder`) con el día de México; nunca en el cliente. Pestañas en `?vista=` (Mañana por defecto, sin parámetro). Lo de pasado mañana en adelante se muestra como «Más adelante» bajo Mañana. Completar/descompletar lo hace cualquiera que capture (`toggleCompleted`, idempotente); editar y borrar siguen `canEdit`/`canDelete`.
 - **Probar en el celular** (desarrollo): `allowedDevOrigins` en `next.config.ts` y `trustedOrigins` de Better Auth aceptan IPs de red local solo en desarrollo. WSL en modo NAT no es alcanzable desde el teléfono: hace falta `networkingMode=mirrored` en `%UserProfile%\.wslconfig` y abrir el puerto 3000 en el firewall de Windows.
 - Avisos de hidratación con `caret-color` vienen de Playwright (capturas) y con `bis_*`/`cz-shortcut-listen` de extensiones del navegador: no son errores de la app.
 - Scripts sueltos que importan módulos con `server-only`: `npx tsx --conditions=react-server archivo.ts`.

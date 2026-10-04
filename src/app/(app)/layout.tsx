@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { isDevelopment } from "@/lib/dev/auto-login";
 import { DevToolbar } from "@/lib/dev/dev-toolbar";
 import { getCaptureOptions } from "@/modules/payments/queries";
+import { getReminderBadge } from "@/modules/reminders/queries";
 
 // Todo lo que está bajo (app) exige sesión. Esta es la verificación real;
 // el proxy solo redirige por comodidad.
@@ -18,7 +19,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await requireUser();
   const isOwner = canAdminister(user);
   // Para el botón «+ Registrar pago» de la barra inferior, disponible en todas las pantallas.
-  const [options, settings] = await Promise.all([getCaptureOptions(), getSettings()]);
+  const [options, settings, reminders] = await Promise.all([getCaptureOptions(), getSettings(), getReminderBadge()]);
 
   return (
     <>
@@ -27,7 +28,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           <Link href="/" className="flex items-center" aria-label="Inicio">
             <TogaWordmark priority className="h-6 w-auto" />
           </Link>
-          <TopNav isOwner={isOwner} />
+          <TopNav isOwner={isOwner} reminders={reminders} />
           <div className="ml-auto flex items-center gap-2">
             <span className="hidden text-sm md:inline">{user.name}</span>
             <Badge variant="secondary" className={isOwner ? "bg-toga-green-soft text-toga-green-strong" : undefined}>
@@ -46,6 +47,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pt-4 pb-28 md:pt-6 md:pb-10">{children}</main>
       <BottomNav
         isOwner={isOwner}
+        reminders={reminders}
         userName={user.name}
         options={options}
         defaultMethod={settings.defaultPaymentMethod}
