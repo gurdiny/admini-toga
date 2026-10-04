@@ -74,25 +74,36 @@ export async function withAudit<T extends { id: string }>(
     const before = options.before ? await options.before(tx) : null;
     const result = await run(tx);
 
-    let changes: Prisma.InputJsonObject;
-    if (options.action === "CREATE" || !before) {
-      changes = { after: snapshot(result) };
-    } else if (options.action === "DELETE") {
-      changes = { before: snapshot(before) };
-    } else {
-      changes = diff(before, result);
-    }
-
-    await tx.auditLog.create({
-      data: {
-        userId: options.userId,
-        action: options.action,
-        entity: options.entity,
-        entityId: result.id,
-        changes,
-      },
-    });
-
+    await recordAudit(tx, { ...options, before, after: result });
     return result;
+  });
+}
+
+/**
+ * Registra en AuditLog dentro de una transacción ya abierta. Para cuando una
+ * operación toca varios registros (p. ej. proveedor + su adeudo inicial):
+ * withAudit() cubre el principal y recordAudit() los demás.
+ */
+export async function recordAudit(
+  tx: Tx,
+  entry: Omit<AuditOptions, "before"> & { before?: Row | null; after: Row & { id: string } },
+) {
+  let changes: Prisma.InputJsonObject;
+  if (entry.action === "CREATE" || !entry.before) {
+    changes = { after: snapshot(entry.after) };
+  } else if (entry.action === "DELETE") {
+    changes = { before: snapshot(entry.before) };
+  } else {
+    changes = diff(entry.before, entry.after);
+  }
+
+  await tx.auditLog.create({
+    data: {
+      userId: entry.userId,
+      action: entry.action,
+      entity: entry.entity,
+      entityId: entry.after.id,
+      changes,
+    },
   });
 }

@@ -40,6 +40,14 @@ export function canDelete(
   return record.createdById === user.id && dayInTZ(record.createdAt) === getToday(now);
 }
 
-/** Mensaje cuando canDelete() es false, para el usuario. */
+/**
+ * Editar un pago, adeudo o recordatorio ya capturado: misma regla que borrar.
+ * Así el mostrador corrige sus errores del día, pero no reescribe el historial.
+ * (Proveedores y clientes sí los edita cualquiera: no son movimientos de dinero.)
+ */
+export const canEdit = canDelete;
+
 export const DELETE_DENIED_MESSAGE =
   "Solo puedes borrar lo que capturaste hoy. Pide al dueño que lo borre.";
+export const EDIT_DENIED_MESSAGE =
+  "Solo puedes corregir lo que capturaste hoy. Pide al dueño que lo cambie.";

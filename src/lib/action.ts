@@ -11,7 +11,7 @@ type ActionConfig<S extends z.ZodType> = {
   /** Rol mínimo. OWNER siempre pasa. */
   role: Role;
   schema: S;
-  /** Rutas a refrescar después de una escritura exitosa. */
+  /** Rutas a refrescar después de una escritura exitosa (incluye sus subrutas). */
   revalidate?: string[];
 };
 
@@ -54,7 +54,7 @@ export function defineAction<S extends z.ZodType, T>(
       }
 
       const data = await handler(parsed.data, { user });
-      config.revalidate?.forEach((path) => revalidatePath(path));
+      config.revalidate?.forEach((path) => revalidatePath(path, "layout"));
       return ok(data);
     } catch (error) {
       unstable_rethrow(error);
