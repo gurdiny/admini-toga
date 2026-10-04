@@ -1,12 +1,11 @@
-import path from "node:path";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "src"),
+      "@": `${import.meta.dirname}/src`,
       // server-only lanza fuera de React Server Components; en pruebas no aplica.
-      "server-only": path.resolve(__dirname, "src/test/server-only-stub.ts"),
+      "server-only": `${import.meta.dirname}/src/test/server-only-stub.ts`,
     },
   },
   test: {

@@ -95,7 +95,7 @@ Los campos que hoy parecen de más — `orderId` en el pago, `currency`, `AppSet
 
 ## Fase 2 — Autenticación y roles
 
-Dos roles bastan: dueño y empleado. El empleado captura; el dueño además ve totales, edita catálogos y revisa la auditoría.
+Dos roles bastan: dueño y mostrador. La idea es quitarle carga al dueño: el mostrador hace toda la captura diaria (pagos, abonos, adeudos, proveedores, clientes y recordatorios) y ve el saldo de cada proveedor; el dueño puede todo eso y además ve los totales generales, administra catálogos y usuarios y revisa la auditoría. Borrar: el dueño siempre; el mostrador solo lo que él capturó hoy.
 
 ```
 claude "Implementa autenticación con Better Auth sobre PostgreSQL y Prisma, con email y contraseña, sin proveedores sociales. Variables: BETTER_AUTH_SECRET y BETTER_AUTH_URL (ya están en .env.example).
@@ -148,11 +148,11 @@ Adeudos con proveedores: createDebt, updateDebt, softDeleteDebt, getSupplierBala
 
 Alta de proveedor con saldo inicial: el formulario de proveedor tiene una sección opcional 'Ya le debo' con monto y fecha 'al día'; si se llena, crea un SupplierDebt de tipo OPENING_BALANCE en la misma transacción.
 
-Página /proveedores/[id] con el estado de cuenta, botón 'Nuevo adeudo' y botón 'Registrar abono'. Los códigos PROV-0001, ADE-0001 y PAG-0001 se muestran en toda la interfaz y se pueden buscar.
+Página /proveedores (listado con búsqueda, alta y edición) y /proveedores/[id] con el estado de cuenta, botón 'Nuevo adeudo' y botón 'Registrar abono'; accesibles para el mostrador, que ve el saldo de cada proveedor. Borrar pagos y adeudos sigue canDelete: el mostrador solo lo que capturó hoy. Los códigos PROV-0001, ADE-0001 y PAG-0001 se muestran en toda la interfaz y se pueden buscar.
 
 Página /pagos: selector rápido de rango (Hoy, Esta Semana, Este Mes, Personalizado) que persiste en la URL como search params, para que el filtro sobreviva a recargar y sea compartible.
 
-Cuatro tarjetas KPI arriba: Total Pagado, Total por pagar (saldo de todos los adeudos abiertos), Proveedor con mayor monto, Cantidad de pagos. Las tarjetas solo se muestran al rol OWNER.
+Cuatro tarjetas KPI arriba: Total Pagado, Total por pagar (saldo de todos los adeudos abiertos), Proveedor con mayor monto, Cantidad de pagos. Las tarjetas solo se muestran al dueño (canViewTotals). El mostrador ve la lista de pagos con sus montos, pero no totales del periodo.
 
 Tabla analítica con desglose por categoría y por proveedor, ordenable por columna, con paginación de 50 registros.
 
@@ -192,7 +192,7 @@ El panel es lo que hace que el sistema crezca sin que tengas que volver a pedir 
 ```
 claude "Construye /admin, accesible solo para rol OWNER, con navegación lateral y estas secciones:
 
-/admin/catalogos — CRUD de categorías y proveedores. Crear, editar, reordenar y desactivar. Una categoría en uso no se puede borrar, solo desactivar; la app lo explica con un mensaje claro en vez de fallar.
+/admin/catalogos — CRUD de categorías (los proveedores ya se administran en /proveedores, abierto al mostrador). Crear, editar, reordenar y desactivar; desactivar proveedores sí queda aquí. Una categoría en uso no se puede borrar, solo desactivar; la app lo explica con un mensaje claro en vez de fallar.
 
 /admin/clientes — listado de clientes con búsqueda, historial de pedidos por cliente y total pagado asociado. Fusionar duplicados cuando el mismo cliente quedó capturado dos veces.
 

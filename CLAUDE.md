@@ -42,7 +42,11 @@ Al cerrar una fase: marcarla aquí, hacer commit (`feat(fase-N): ...`) y entrega
 5. **Server Actions** se escriben con `defineAction()` de `src/lib/action.ts`, que fija el orden: verificar rol (`requireRole`) → validar con Zod → ejecutar (escrituras dentro de `withAudit`) → `revalidatePath` → devolver `Result<T>`. Nunca lanzan hacia el cliente: `toFailure()` de `src/lib/errors.ts` traduce todo a español. Para errores de negocio esperados, lanzar `BusinessError("mensaje para el usuario")`.
 6. **Texto capturado a mano** se normaliza con `src/lib/normalize.ts` antes de guardar: `nameKey` (`toNameKey`) es la llave única de proveedores y categorías, el folio va en mayúsculas (`normalizeFolio`) y el teléfono en 10 dígitos (`normalizePhoneMX`). Nunca buscar duplicados por `name`.
 7. **Catálogos administrables**: categorías, proveedores y configuración viven en la base (`Category`, `Supplier`, `AppSetting`), no en enums ni constantes del código.
-8. **Roles**: `OWNER` ve todo; `STAFF` captura pagos y recordatorios pero no ve montos totales ni `/admin`. Ocultar en UI no basta: se valida en servidor.
+8. **Roles** (matriz única en `src/lib/auth/permissions.ts`; nunca comparar roles sueltos):
+   - **Mostrador (`STAFF`)** hace la captura diaria para quitarle carga al dueño: pagos, abonos, adeudos, **proveedores**, clientes y recordatorios. Ve montos individuales y el saldo de cada proveedor (los necesita para abonar), pero **no** los totales generales (`canViewTotals`): total pagado del periodo, total por pagar, rankings, gráficas, reportes.
+   - **Borrar** (`canDelete`): el dueño siempre; el mostrador solo lo que él capturó **hoy** (día de México).
+   - **Dueño (`OWNER`)**: todo lo anterior + totales + `/admin` (categorías, usuarios, auditoría, papelera, configuración, fusionar clientes).
+   - Ocultar en la UI no basta: cada Server Action valida con `requireRole` y, al borrar, con `canDelete`.
 9. **Seguridad de rutas**: `proxy.ts` solo redirige a `/login`; nunca es la barrera de seguridad (CVE-2025-29927). La sesión y el rol se verifican en cada layout de servidor y al inicio de cada Server Action.
 
 ## Marca TOGA

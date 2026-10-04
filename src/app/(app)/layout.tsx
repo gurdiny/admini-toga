@@ -2,7 +2,8 @@ import Link from "next/link";
 import { LogOut } from "lucide-react";
 import { TogaWordmark } from "@/components/brand/toga-logo";
 import { logout } from "@/lib/auth/actions";
-import { hasRole, requireUser } from "@/lib/auth/session";
+import { canAdminister } from "@/lib/auth/permissions";
+import { requireUser } from "@/lib/auth/session";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DevToolbar } from "@/lib/dev/dev-toolbar";
@@ -11,7 +12,7 @@ import { DevToolbar } from "@/lib/dev/dev-toolbar";
 // el proxy solo redirige por comodidad.
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await requireUser();
-  const isOwner = hasRole(user, "OWNER");
+  const isOwner = canAdminister(user);
 
   return (
     <>
