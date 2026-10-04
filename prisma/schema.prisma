@@ -1,0 +1,11 @@
+// Esquema de la base. Todo cambio pasa por `npx prisma migrate dev`, nunca `db push`.
+// Los modelos se definen en la Fase 1 (ver docs/PLAN.md).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}

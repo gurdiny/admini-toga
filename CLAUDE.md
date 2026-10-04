@@ -1,3 +1,5 @@
+@AGENTS.md
+
 # Sistema de Joyería — Pagos a proveedores y recordatorios
 
 App interna para una joyería: captura de pagos a proveedores, checklist de pedidos de clientes y panel de administración. Dos usuarios (dueño y empleado), uso principal desde celular en el mostrador/taller.
@@ -6,7 +8,7 @@ El plan completo por fases está en [docs/PLAN.md](docs/PLAN.md). **Trabaja una 
 
 ## Estado de fases
 
-- [ ] Fase 0 — Infraestructura y repositorio
+- [x] Fase 0 — Infraestructura y repositorio
 - [ ] Fase 1 — Modelo de datos (Prisma)
 - [ ] Fase 2 — Autenticación y roles
 - [ ] Fase 3 — Capa de datos, validación y zona horaria
@@ -74,26 +76,25 @@ Un módulo nuevo (inventario, ventas…) es una carpeta nueva en `src/modules/`,
 
 ## Comandos
 
-> Los scripts `npm run db:*` se crean en la Fase 0.
-
 ```bash
-docker compose up -d                # levantar Postgres local (requiere Docker en WSL)
-docker compose down                 # detenerlo (los datos se conservan)
-docker compose down -v              # detenerlo y BORRAR la base local
-npm run dev                         # servidor local
-npx prisma migrate dev --name xxx   # nueva migración
-npx prisma generate                 # regenerar cliente (Prisma 7 no lo hace solo en todos los casos)
-npx prisma db seed                  # datos de ejemplo (Prisma 7 no lo corre al migrar)
-npx prisma studio                   # explorar la base
-npm run test                        # Vitest
+npm run db:up                          # Postgres local en Docker (puerto 5433)
+npm run dev                            # servidor local
+npm run db:migrate -- --name xxx       # nueva migración (nunca db push)
+npm run db:generate                    # regenerar cliente tras cambiar el esquema
+npm run db:seed                        # datos de ejemplo (Prisma 7 no lo corre al migrar)
+npm run db:studio                      # explorar la base
+npm run lint && npm run typecheck      # antes de cada commit
+npm run build                          # verificar build de producción
 ```
 
-Variables: [.env.example](.env.example) documenta todas; `.env` local ya existe con credenciales de desarrollo y un `BETTER_AUTH_SECRET` generado. Se usa el puerto 5433 porque 5432 lo ocupa otro contenedor (pgvector-dev). Si 5433 está ocupado, cambiar `DB_PORT` y `DATABASE_URL`.
+Variables: [.env.example](.env.example) documenta todas. Se usa el puerto 5433 porque 5432 lo ocupa otro contenedor del usuario (pgvector-dev).
 
-## Notas para la Fase 0
+## Notas técnicas
 
-- `create-next-app` se niega a correr en un directorio con archivos. Generar el proyecto en un directorio temporal y mover los archivos aquí, fusionando el `.gitignore` existente sin perder sus reglas.
-- Consultar la documentación actual (Context7) de Next.js 16, Prisma 7 y Better Auth antes de escribir configuración: sus APIs cambiaron respecto a versiones anteriores.
-- Prisma 7 no carga `.env` automáticamente: `prisma.config.ts` empieza con `import 'dotenv/config'`.
+- Prisma fijado en **7.10.x**: el tag `latest` de npm apunta a Prisma 8 RC. No actualizar a 8 sin decidirlo.
+- Cliente de Prisma: `import { db } from "@/lib/db"`. Tipos y enums desde `@/generated/prisma/client`. Referencias de Prisma 7 en `.claude/skills/prisma-*`.
+- Prisma 7 no carga `.env` solo: `prisma.config.ts` empieza con `import "dotenv/config"`.
+- Next.js 16: antes de escribir código de Next leer la guía correspondiente en `node_modules/next/dist/docs/` (ver AGENTS.md). Tipos globales como `LayoutProps`/`PageProps` se generan con `next typegen`.
+- shadcn/ui: estilo `radix-nova`, componentes con `npx shadcn@latest add <componente>`.
 - Para exportar a Excel usar `exceljs`: el paquete `xlsx` publicado en npm está desactualizado y con vulnerabilidades conocidas.
 - El modelo `User` debe ser compatible con Better Auth: el hash de la contraseña vive en `Account.password`, no en `User`.

@@ -45,3 +45,11 @@ Thumbs.db
 
 # Claude Code: settings personales
 .claude/settings.local.json
+
+# yarn / pnpm (de la plantilla de Next.js)
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+.pnpm-debug.log*
