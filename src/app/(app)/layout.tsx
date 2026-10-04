@@ -1,0 +1,48 @@
+import Link from "next/link";
+import { Gem, LogOut } from "lucide-react";
+import { logout } from "@/lib/auth/actions";
+import { hasRole, requireUser } from "@/lib/auth/session";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+
+// Todo lo que está bajo (app) exige sesión. Esta es la verificación real;
+// el proxy solo redirige por comodidad.
+export default async function AppLayout({ children }: LayoutProps<"/">) {
+  const user = await requireUser();
+  const isOwner = hasRole(user, "OWNER");
+
+  return (
+    <>
+      <header className="border-b">
+        <div className="mx-auto flex h-14 max-w-5xl items-center gap-4 px-4">
+          <Link href="/" className="flex items-center gap-2 font-semibold">
+            <Gem className="size-5" aria-hidden />
+            <span className="hidden sm:inline">Joyería</span>
+          </Link>
+          <nav className="flex items-center gap-1 text-sm">
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/">Inicio</Link>
+            </Button>
+            {isOwner && (
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/admin">Administración</Link>
+              </Button>
+            )}
+          </nav>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="hidden text-sm sm:inline">{user.name}</span>
+            <Badge variant={isOwner ? "default" : "secondary"}>
+              {isOwner ? "Dueño" : "Mostrador"}
+            </Badge>
+            <form action={logout}>
+              <Button type="submit" variant="ghost" size="icon" aria-label="Cerrar sesión">
+                <LogOut aria-hidden />
+              </Button>
+            </form>
+          </div>
+        </div>
+      </header>
+      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col p-4">{children}</div>
+    </>
+  );
+}

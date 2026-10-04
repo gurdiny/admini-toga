@@ -10,7 +10,7 @@ El plan completo por fases está en [docs/PLAN.md](docs/PLAN.md). **Trabaja una 
 
 - [x] Fase 0 — Infraestructura y repositorio
 - [x] Fase 1 — Modelo de datos (Prisma)
-- [ ] Fase 2 — Autenticación y roles
+- [x] Fase 2 — Autenticación y roles
 - [ ] Fase 3 — Capa de datos, validación y zona horaria
 - [ ] Fase 4 — Módulo de pagos
 - [ ] Fase 5 — Recordatorios / checklist
@@ -103,6 +103,9 @@ Variables: [.env.example](.env.example) documenta todas. Se usa el puerto 5433 p
 - **Crédito con proveedores**: `SupplierDebt` es lo que se debe (`OPENING_BALANCE` = saldo que ya existía al dar de alta al proveedor; `CREDIT` = mercancía a crédito). `SupplierPayment.debtId` lo convierte en abono; sin `debtId` es pago de contado. El saldo nunca se guarda: `amount − Σ abonos con deletedAt null`. La base impide abonar a un adeudo de otro proveedor (FK compuesta `[debtId, supplierId]`) y montos ≤ 0 (CHECK). Triggers de Postgres (migración `debt_balance_guard`) impiden que los abonos excedan el saldo, abonar a un adeudo eliminado o en otra moneda, bajar el monto de un adeudo por debajo de lo abonado y eliminar un adeudo con abonos vigentes. Lanzan `check_violation` con el mensaje iniciando en un código estable (`ABONO_EXCEDE_SALDO`, `MONEDA_DISTINTA`, `ADEUDO_ELIMINADO`, `ADEUDO_CON_ABONOS`, `MONTO_MENOR_A_ABONADO`) que las Server Actions traducen a un mensaje en español. La Server Action valida también antes, para dar un error amable.
 - Códigos visibles: `code` autoincremental, mostrado como `PROV-0001`, `ADE-0001`, `PAG-0001`. El `id` (cuid) es interno y nunca se muestra.
 - Los CHECK constraints se agregan a mano al final del `migration.sql`; Prisma no los genera ni los detecta como drift.
+- **Auth** (`src/lib/auth/`): `config.ts` (Better Auth, registro deshabilitado, sesión 30 días, sin cookieCache para que desactivar/cambiar rol aplique al instante), `session.ts` (`getCurrentUser`, `requireUser` y `requirePageRole` para layouts/páginas —redirigen—, `requireRole` para Server Actions —lanza `AuthorizationError`—; OWNER pasa cualquier `requireRole`), `actions.ts` (login/logout). Rutas protegidas viven en el grupo `src/app/(app)/`; `/admin` tiene su propio layout con `requirePageRole("OWNER")`.
+- **Auditoría**: toda escritura pasa por `withAudit()` de `src/lib/audit.ts`, que corre la escritura y el `AuditLog` en una sola transacción. Para UPDATE/DELETE pasar `before` para obtener el diff.
+- Scripts sueltos que importan módulos con `server-only`: `npx tsx --conditions=react-server archivo.ts`.
 - shadcn/ui: estilo `radix-nova`, componentes con `npx shadcn@latest add <componente>`.
 - Para exportar a Excel usar `exceljs`: el paquete `xlsx` publicado en npm está desactualizado y con vulnerabilidades conocidas.
 - El modelo `User` debe ser compatible con Better Auth: el hash de la contraseña vive en `Account.password`, no en `User`.
