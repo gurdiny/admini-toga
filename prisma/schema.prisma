@@ -9,6 +9,8 @@
 //   por eso las relaciones usan onDelete: Restrict.
 // - `nameKey` es el nombre normalizado (minúsculas, sin acentos ni espacios dobles):
 //   evita que "Juan", "JUAN" y "juan " cuenten como tres registros distintos.
+// - `id` es interno (cuid). `code` es el número consecutivo que ve el usuario
+//   (PROV-0001, ADE-0001, PAG-0001); lo genera la base, nadie lo captura.
 
 generator client {
   provider = "prisma-client"
@@ -38,10 +40,9 @@ enum PaymentMethod {
   CHEQUE
 }
 
-enum PaymentStatus {
-  ANTICIPO
-  LIQUIDADO
-  PENDIENTE
+enum DebtKind {
+  OPENING_BALANCE // saldo que ya se debía al dar de alta al proveedor en el sistema
+  CREDIT // mercancía o trabajo recibido a crédito
 }
 
 enum Priority {
@@ -74,6 +75,7 @@ model User {
   accounts Account[]
 
   paymentsCreated    SupplierPayment[] @relation("PaymentCreatedBy")
+  debtsCreated       SupplierDebt[]    @relation("DebtCreatedBy")
   remindersCreated   OrderReminder[]   @relation("ReminderCreatedBy")
   remindersCompleted OrderReminder[]   @relation("ReminderCompletedBy")
   auditLogs          AuditLog[]
@@ -146,6 +148,7 @@ model Category {
   updatedAt DateTime     @updatedAt
 
   suppliers Supplier[]
+  debts     SupplierDebt[]
   payments  SupplierPayment[]
 
   // El mismo nombre puede existir como categoría de proveedor y de pago.
@@ -154,18 +157,26 @@ model Category {
   @@map("categories")
 }
 
+// Ningún dato de contacto es obligatorio: muchos proveedores no tienen
+// correo ni WhatsApp. Solo el nombre.
 model Supplier {
-  id         String   @id @default(cuid(2))
-  name       String
-  nameKey    String   @unique
-  categoryId String?
-  phone      String? // 10 dígitos, normalizado
-  notes      String?
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          String   @id @default(cuid(2))
+  code        Int      @unique @default(autoincrement()) // se muestra como PROV-0001
+  name        String
+  nameKey     String   @unique
+  categoryId  String?
+  contactName String? // persona con quien se trata
+  phone       String? // 10 dígitos, normalizado
+  hasWhatsApp Boolean  @default(false) // solo entonces se muestra el enlace a WhatsApp
+  email       String?
+  address     String?
+  notes       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   category Category?         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  debts    SupplierDebt[]
   payments SupplierPayment[]
 
   @@index([isActive])
@@ -193,8 +204,46 @@ model Client {
 
 // ─── Operación ──────────────────────────────────────────────────────────────
 
+// Lo que se le debe a un proveedor: un crédito (pedido de 50 mil que se va
+// pagando en abonos) o el saldo inicial con que se dio de alta.
+// El saldo NO se guarda: es amount − suma de abonos vigentes (deletedAt null).
+// Un proveedor puede tener varios adeudos abiertos a la vez.
+model SupplierDebt {
+  id          String    @id @default(cuid(2))
+  code        Int       @unique @default(autoincrement()) // se muestra como ADE-0001
+  supplierId  String
+  kind        DebtKind  @default(CREDIT)
+  date        DateTime  @db.Date // día en que se contrajo, o "al día" del saldo inicial
+  description String
+  amount      Decimal   @db.Decimal(12, 2) // monto original del adeudo
+  currency    String    @default("MXN") @db.Char(3)
+  categoryId  String? // categoría de gasto que heredan sus abonos por defecto
+  dueDate     DateTime? @db.Date // fecha límite acordada, si la hay
+  supplierRef String? // folio o nota de remisión del proveedor
+  notes       String?
+  createdById String
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  supplier  Supplier          @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  category  Category?         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  createdBy User              @relation("DebtCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  payments  SupplierPayment[]
+
+  // Permite que SupplierPayment apunte a (debtId, supplierId): así la base
+  // impide abonar a un adeudo de otro proveedor.
+  @@unique([id, supplierId])
+  @@index([supplierId, date])
+  @@index([deletedAt])
+  @@map("supplier_debts")
+}
+
+// Dinero que salió hacia un proveedor. Con debtId es un abono a ese adeudo;
+// sin debtId es un pago de contado.
 model SupplierPayment {
   id            String        @id @default(cuid(2))
+  code          Int           @unique @default(autoincrement()) // se muestra como PAG-0001
   date          DateTime      @db.Date
   supplierId    String
   categoryId    String
@@ -203,7 +252,7 @@ model SupplierPayment {
   currency      String        @default("MXN") @db.Char(3)
   exchangeRate  Decimal?      @db.Decimal(10, 4) // a MXN, solo si currency != MXN
   paymentMethod PaymentMethod
-  status        PaymentStatus
+  debtId        String? // adeudo al que abona; null = pago de contado
   orderId       String? // pedido de cliente al que corresponde el gasto
   createdById   String
   deletedAt     DateTime?
@@ -212,6 +261,7 @@ model SupplierPayment {
 
   supplier  Supplier       @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   category  Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  debt      SupplierDebt?  @relation(fields: [debtId, supplierId], references: [id, supplierId], onDelete: Restrict)
   order     OrderReminder? @relation(fields: [orderId], references: [id], onDelete: Restrict)
   createdBy User           @relation("PaymentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
 
@@ -219,6 +269,7 @@ model SupplierPayment {
   @@index([deletedAt])
   @@index([categoryId])
   @@index([orderId])
+  @@index([debtId])
   @@map("supplier_payments")
 }
 

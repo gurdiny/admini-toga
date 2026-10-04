@@ -91,17 +91,24 @@ async function main() {
   }
 
   // ─── Proveedores ───────────────────────────────────────────────────────
+  // Contacto variado a propósito: hay proveedores sin teléfono ni WhatsApp.
   const suppliers = [
-    ["Metales Finos del Centro", "Metales", "55 1234 5678"],
-    ["Fundición Hernández", "Taller externo", "55 2345 6789"],
-    ["Gemas y Brillantes Polanco", "Gemas", "55 3456 7890"],
-    ["Taller de Engaste Ruiz", "Taller externo", "55 4567 8901"],
-    ["Estuches y Empaques MX", "Insumos", "55 5678 9012"],
+    ["Metales Finos del Centro", "Metales", "Don Ernesto", "55 1234 5678", true],
+    ["Fundición Hernández", "Taller externo", "Sr. Hernández", "55 2345 6789", false],
+    ["Gemas y Brillantes Polanco", "Gemas", null, "55 3456 7890", true],
+    ["Taller de Engaste Ruiz", "Taller externo", "Lupita Ruiz", null, false],
+    ["Estuches y Empaques MX", "Insumos", null, null, false],
   ] as const;
   const sup: Record<string, string> = {};
-  for (const [name, category, phone] of suppliers) {
+  for (const [name, category, contactName, phone, hasWhatsApp] of suppliers) {
     const nameKey = toNameKey(name);
-    const data = { name, categoryId: supCat[category], phone: normalizePhoneMX(phone) };
+    const data = {
+      name,
+      categoryId: supCat[category],
+      contactName,
+      phone: normalizePhoneMX(phone),
+      hasWhatsApp,
+    };
     sup[name] = (
       await db.supplier.upsert({ where: { nameKey }, update: data, create: { ...data, nameKey } })
     ).id;
@@ -158,17 +165,44 @@ async function main() {
     orders.push(order.id);
   }
 
+  // Adeudos: saldo inicial de un proveedor que ya se debía al empezar a usar
+  // el sistema, un crédito ya liquidado seguido de uno nuevo, y uno a medias.
+  const debts = [
+    { key: "metales-inicial", day: -40, supplier: "Metales Finos del Centro", kind: "OPENING_BALANCE", category: "Oro", description: "Saldo pendiente al dar de alta al proveedor", amount: "50000.00", ref: null, due: null },
+    { key: "gemas-diamante", day: -10, supplier: "Gemas y Brillantes Polanco", kind: "CREDIT", category: "Piedras y gemas", description: "Diamante 0.5 ct VS1 y lote de 10 zafiros 3 mm", amount: "25000.00", ref: "NR-2231", due: 20 },
+    { key: "fundicion-argollas", day: -6, supplier: "Fundición Hernández", kind: "CREDIT", category: "Fundición", description: "Fundición de 3 argollas", amount: "950.00", ref: null, due: null },
+    { key: "fundicion-lote", day: -2, supplier: "Fundición Hernández", kind: "CREDIT", category: "Fundición", description: "Fundición de lote de dijes", amount: "3000.00", ref: "F-118", due: 15 },
+  ] as const;
+  const debt: Record<string, string> = {};
+  for (const d of debts) {
+    const created = await db.supplierDebt.create({
+      data: {
+        supplierId: sup[d.supplier],
+        kind: d.kind,
+        date: mxDay(d.day),
+        description: d.description,
+        amount: new Prisma.Decimal(d.amount),
+        categoryId: payCat[d.category],
+        supplierRef: d.ref,
+        dueDate: d.due === null ? null : mxDay(d.due),
+        createdById: owner.id,
+      },
+    });
+    debt[d.key] = created.id;
+  }
+
+  // debt: null = pago de contado.
   const payments = [
-    { day: 0, supplier: "Metales Finos del Centro", category: "Oro", concept: "10 g oro 14k para anillo", amount: "12850.00", method: "TRANSFERENCIA", status: "LIQUIDADO", order: 0 },
-    { day: 0, supplier: "Taller de Engaste Ruiz", category: "Engaste", concept: "Engaste de diamante 0.5 ct", amount: "1800.00", method: "EFECTIVO", status: "ANTICIPO", order: 0 },
-    { day: -1, supplier: "Metales Finos del Centro", category: "Plata", concept: "Lámina de plata .925, 50 g", amount: "1450.50", method: "TRANSFERENCIA", status: "LIQUIDADO", order: 1 },
-    { day: -1, supplier: "Estuches y Empaques MX", category: "Empaque y estuches", concept: "Caja de 50 estuches de terciopelo", amount: "2300.00", method: "TARJETA", status: "LIQUIDADO", order: null },
-    { day: -3, supplier: "Fundición Hernández", category: "Fundición", concept: "Fundición de 3 argollas", amount: "950.00", method: "EFECTIVO", status: "LIQUIDADO", order: null },
-    { day: -4, supplier: "Gemas y Brillantes Polanco", category: "Piedras y gemas", concept: "Diamante 0.5 ct VS1", amount: "18500.00", method: "TRANSFERENCIA", status: "ANTICIPO", order: 0 },
-    { day: -8, supplier: "Gemas y Brillantes Polanco", category: "Piedras y gemas", concept: "Zafiros 3 mm, lote de 10", amount: "3200.00", method: "CHEQUE", status: "PENDIENTE", order: null },
-    { day: -12, supplier: "Fundición Hernández", category: "Grabado y acabados", concept: "Grabado láser de 5 piezas", amount: "750.00", method: "EFECTIVO", status: "LIQUIDADO", order: 1 },
-    { day: -20, supplier: "Estuches y Empaques MX", category: "Herramientas e insumos", concept: "Pulidor y paños de microfibra", amount: "640.00", method: "TARJETA", status: "LIQUIDADO", order: null },
-    { day: -35, supplier: "Metales Finos del Centro", category: "Oro", concept: "Gramos de oro 10k para inventario", amount: "21400.00", method: "TRANSFERENCIA", status: "LIQUIDADO", order: null },
+    { day: -35, supplier: "Metales Finos del Centro", category: "Oro", concept: "Abono a saldo inicial", amount: "21400.00", method: "TRANSFERENCIA", debt: "metales-inicial", order: null },
+    { day: -1, supplier: "Metales Finos del Centro", category: "Plata", concept: "Abono a saldo inicial", amount: "1450.50", method: "TRANSFERENCIA", debt: "metales-inicial", order: 1 },
+    { day: 0, supplier: "Metales Finos del Centro", category: "Oro", concept: "Abono: 10 g oro 14k para anillo", amount: "12850.00", method: "TRANSFERENCIA", debt: "metales-inicial", order: 0 },
+    { day: -4, supplier: "Gemas y Brillantes Polanco", category: "Piedras y gemas", concept: "Anticipo diamante", amount: "18500.00", method: "TRANSFERENCIA", debt: "gemas-diamante", order: 0 },
+    { day: -3, supplier: "Fundición Hernández", category: "Fundición", concept: "Liquidación fundición de argollas", amount: "950.00", method: "EFECTIVO", debt: "fundicion-argollas", order: null },
+    { day: 0, supplier: "Taller de Engaste Ruiz", category: "Engaste", concept: "Engaste de diamante 0.5 ct", amount: "1800.00", method: "EFECTIVO", debt: null, order: 0 },
+    { day: -1, supplier: "Estuches y Empaques MX", category: "Empaque y estuches", concept: "Caja de 50 estuches de terciopelo", amount: "2300.00", method: "TARJETA", debt: null, order: null },
+    { day: -12, supplier: "Fundición Hernández", category: "Grabado y acabados", concept: "Grabado láser de 5 piezas", amount: "750.00", method: "EFECTIVO", debt: null, order: 1 },
+    { day: -20, supplier: "Estuches y Empaques MX", category: "Herramientas e insumos", concept: "Pulidor y paños de microfibra", amount: "640.00", method: "TARJETA", debt: null, order: null },
+    { day: -8, supplier: "Gemas y Brillantes Polanco", category: "Piedras y gemas", concept: "Abono zafiros", amount: "3000.00", method: "CHEQUE", debt: "gemas-diamante", order: null },
   ] as const;
   for (const p of payments) {
     await db.supplierPayment.create({
@@ -179,7 +213,7 @@ async function main() {
         concept: p.concept,
         amount: new Prisma.Decimal(p.amount),
         paymentMethod: p.method,
-        status: p.status,
+        debtId: p.debt === null ? null : debt[p.debt],
         orderId: p.order === null ? null : orders[p.order],
         createdById: p.day < -10 ? owner.id : staff.id,
       },
@@ -189,7 +223,7 @@ async function main() {
   console.log(
     `Seed listo: 2 usuarios, ${paymentCategories.length + supplierCategories.length} categorías, ` +
       `${suppliers.length} proveedores, ${clients.length} clientes, ${reminders.length} pedidos, ` +
-      `${payments.length} pagos.`,
+      `${debts.length} adeudos, ${payments.length} pagos.`,
   );
   console.log(`Acceso: dueno@joyeria.local / mostrador@joyeria.local — contraseña: ${DEV_PASSWORD}`);
 }

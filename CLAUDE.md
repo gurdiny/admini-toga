@@ -100,6 +100,9 @@ Variables: [.env.example](.env.example) documenta todas. Se usa el puerto 5433 p
 - Next.js 16: antes de escribir código de Next leer la guía correspondiente en `node_modules/next/dist/docs/` (ver AGENTS.md). Tipos globales como `LayoutProps`/`PageProps` se generan con `next typegen`.
 - Better Auth: el hash de contraseña vive en `Account.password` con `providerId = "credential"` y `accountId = user.id`. Las relaciones hacia `User` de datos de negocio usan `onDelete: Restrict` (los usuarios se desactivan, no se borran).
 - `SupplierPayment.orderId` apunta a `OrderReminder`: el recordatorio es el pedido del cliente.
+- **Crédito con proveedores**: `SupplierDebt` es lo que se debe (`OPENING_BALANCE` = saldo que ya existía al dar de alta al proveedor; `CREDIT` = mercancía a crédito). `SupplierPayment.debtId` lo convierte en abono; sin `debtId` es pago de contado. El saldo nunca se guarda: `amount − Σ abonos con deletedAt null`. La base impide abonar a un adeudo de otro proveedor (FK compuesta `[debtId, supplierId]`) y montos ≤ 0 (CHECK). Que el abono no exceda el saldo se valida en la Server Action, dentro de una transacción.
+- Códigos visibles: `code` autoincremental, mostrado como `PROV-0001`, `ADE-0001`, `PAG-0001`. El `id` (cuid) es interno y nunca se muestra.
+- Los CHECK constraints se agregan a mano al final del `migration.sql`; Prisma no los genera ni los detecta como drift.
 - shadcn/ui: estilo `radix-nova`, componentes con `npx shadcn@latest add <componente>`.
 - Para exportar a Excel usar `exceljs`: el paquete `xlsx` publicado en npm está desactualizado y con vulnerabilidades conocidas.
 - El modelo `User` debe ser compatible con Better Auth: el hash de la contraseña vive en `Account.password`, no en `User`.

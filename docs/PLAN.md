@@ -1,6 +1,6 @@
 # Plan de Desarrollo por Fases — Sistema de Joyería
 
-3 oct 2026 · @GERA URIAS · v2.1 (4 oct 2026: hosting en VPS propio, Postgres en Docker, User compatible con Better Auth)
+3 oct 2026 · @GERA URIAS · v2.2 (4 oct 2026: hosting en VPS propio, Postgres en Docker, User compatible con Better Auth, adeudos y abonos a proveedores)
 
 ## Qué faltaba en el plan original
 
@@ -13,7 +13,7 @@ El plan v1.0 resuelve bien la captura y los reportes, pero deja fuera doce cosas
 | No hay auditoría | Nadie sabe quién editó o borró un pago, ni cuándo | 1 y 2 |
 | Borrado físico de registros | Un pago borrado por error no se recupera | 1 |
 | Pedido y pago están desconectados | No puedes saber cuánto costó una pieza ni su margen | 1 |
-| `status` sin definir | En joyería hay anticipo, saldo y liquidado; falta modelarlo | 1 |
+| Sin control de crédito con proveedores | Los proveedores dan mercancía a crédito y se paga en abonos; hay que saber cuánto se le debe a cada uno y dar de alta la deuda que ya existía | 1 y 4 |
 | Categorías escritas en el código | Cada categoría nueva exige un deploy | 1 y 6 |
 | Zona horaria sin resolver | "Hoy" calculado en UTC clasifica mal todo pedido capturado después de las 18:00 en CDMX | 3 |
 | Sin respaldos de la base | Si se pierde la base, se pierde todo | 8 |
@@ -68,13 +68,15 @@ claude "Diseña el esquema Prisma completo con estos modelos:
 
 User, compatible con Better Auth: id, name, email único, emailVerified, image opcional, role (enum OWNER|STAFF, default STAFF), isActive, createdAt, updatedAt. El hash de la contraseña NO va en User: Better Auth lo guarda en Account.password. Agrega los modelos que Better Auth requiere (Session, Account, Verification) con los campos exactos de su documentación actual o generados con su CLI.
 
-Supplier: id, name único, category (relación), phone, notes, isActive, createdAt. Reemplaza el supplierName de texto libre.
+Supplier: id, code consecutivo (PROV-0001), name con nameKey normalizado único, category (relación), contactName, phone, hasWhatsApp, email, address, notes, isActive, createdAt. Ningún dato de contacto es obligatorio. Reemplaza el supplierName de texto libre.
+
+SupplierDebt: id, code consecutivo (ADE-0001), supplierId, kind (enum OPENING_BALANCE|CREDIT), date, description, amount Decimal(12,2), currency, categoryId opcional, dueDate opcional, supplierRef opcional, notes, createdById, deletedAt opcional. El saldo no se guarda: es amount menos la suma de sus abonos.
 
 Category: id, name único, type (enum SUPPLIER|PAYMENT), color, sortOrder, isActive. Catálogo administrable, no enum fijo.
 
 Client: id, name, phone, folio único opcional, notes, createdAt. Un cliente tiene muchos OrderReminder.
 
-SupplierPayment: id, date, supplierId, categoryId, concept, amount Decimal(12,2), currency (default MXN), exchangeRate Decimal(10,4) opcional, paymentMethod (enum EFECTIVO|TRANSFERENCIA|TARJETA|CHEQUE), status (enum ANTICIPO|LIQUIDADO|PENDIENTE), orderId opcional, createdById, deletedAt opcional, createdAt, updatedAt.
+SupplierPayment: id, code consecutivo (PAG-0001), date, supplierId, categoryId, concept, amount Decimal(12,2), currency (default MXN), exchangeRate Decimal(10,4) opcional, paymentMethod (enum EFECTIVO|TRANSFERENCIA|TARJETA|CHEQUE), debtId opcional (abono a un adeudo del mismo proveedor; null = pago de contado), orderId opcional, createdById, deletedAt opcional, createdAt, updatedAt.
 
 OrderReminder: id, clientId, targetDate Date, targetTime String opcional, note Text, isCompleted, completedAt opcional, completedById opcional, priority (enum NORMAL|ALTA), deletedAt opcional, createdById, createdAt, updatedAt.
 
@@ -142,18 +144,24 @@ claude "Construye el módulo de pagos en /src/modules/payments.
 
 Server Actions: createPayment, updatePayment, softDeletePayment, getPayments(filters), getPaymentsSummary(range). El resumen agrupa por día, semana, mes o rango libre usando los helpers de zona horaria, y devuelve total, conteo, total por proveedor y total por categoría. Excluye siempre los registros con deletedAt.
 
+Adeudos con proveedores: createDebt, updateDebt, softDeleteDebt, getSupplierBalances() (saldo por proveedor = adeudos − abonos vigentes) y getSupplierStatement(supplierId) (estado de cuenta: adeudos y abonos en orden cronológico con saldo corrido). Un abono nunca puede ser mayor al saldo pendiente del adeudo; validarlo en servidor dentro de una transacción. No se puede borrar un adeudo que tiene abonos vigentes.
+
+Alta de proveedor con saldo inicial: el formulario de proveedor tiene una sección opcional 'Ya le debo' con monto y fecha 'al día'; si se llena, crea un SupplierDebt de tipo OPENING_BALANCE en la misma transacción.
+
+Página /proveedores/[id] con el estado de cuenta, botón 'Nuevo adeudo' y botón 'Registrar abono'. Los códigos PROV-0001, ADE-0001 y PAG-0001 se muestran en toda la interfaz y se pueden buscar.
+
 Página /pagos: selector rápido de rango (Hoy, Esta Semana, Este Mes, Personalizado) que persiste en la URL como search params, para que el filtro sobreviva a recargar y sea compartible.
 
-Tres tarjetas KPI arriba: Total Pagado, Proveedor con mayor monto, Cantidad de pagos. Las tarjetas solo se muestran al rol OWNER.
+Cuatro tarjetas KPI arriba: Total Pagado, Total por pagar (saldo de todos los adeudos abiertos), Proveedor con mayor monto, Cantidad de pagos. Las tarjetas solo se muestran al rol OWNER.
 
 Tabla analítica con desglose por categoría y por proveedor, ordenable por columna, con paginación de 50 registros.
 
-Modal de captura con selector de proveedor que permite crear uno nuevo en línea si no existe, selector de categoría desde el catálogo, monto con máscara de moneda, método de pago y estado. El campo de monto nunca acepta texto.
+Modal de captura con selector de proveedor que permite crear uno nuevo en línea si no existe; al elegir un proveedor con adeudos abiertos, ofrece abonar a uno de ellos (preseleccionado el más antiguo) mostrando su saldo, o registrarlo como pago de contado. Selector de categoría desde el catálogo (por defecto la del adeudo), monto con máscara de moneda y método de pago. El campo de monto nunca acepta texto.
 
 Todo con estados de carga, estado vacío con mensaje útil, y confirmación antes de eliminar. Diseño responsivo: en celular la tabla se convierte en tarjetas apiladas."
 ```
 
-Qué verificar: captura tres pagos de distintos días y confirma que el filtro "Esta Semana" los suma correctamente. Elimina uno y confirma que desaparece de la vista pero sigue en la base con `deletedAt`.
+Qué verificar: captura tres pagos de distintos días y confirma que el filtro "Esta Semana" los suma correctamente. Elimina uno y confirma que desaparece de la vista pero sigue en la base con `deletedAt`. Da de alta un proveedor con saldo inicial de $50,000, abónale $20,000 y confirma que su estado de cuenta muestra $30,000 pendientes; intenta abonar $40,000 y confirma que la app lo impide.
 
 ## Fase 5 — Checklist y recordatorios
 
