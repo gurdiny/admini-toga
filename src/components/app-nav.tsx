@@ -169,7 +169,7 @@ function TabLink({
         href={href}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "flex h-16 flex-col items-center justify-center gap-0.5 text-[11px]",
+          "flex h-16 flex-col items-center justify-center gap-0.5 text-[10px] tracking-tight min-[380px]:text-[11px] min-[380px]:tracking-normal",
           active ? "text-foreground font-bold" : "text-muted-foreground",
         )}
       >

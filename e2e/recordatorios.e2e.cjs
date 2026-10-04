@@ -135,8 +135,15 @@ const mxDay = (offset) => {
     log(await staff.evaluate(() => window.__sinRecarga === true), "La página no se recargó");
     await staff.unroute("**/recordatorios**");
 
+    log(await staff.getByRole("button", { name: "Avisar por WhatsApp" }).isVisible(), "Al completar, el aviso ofrece «Avisar por WhatsApp»");
     await openTab(staff, "Completados");
     log(await card(staff, "E2E anillo talla 7").getByText(/Completado .* por /).isVisible(), "En «Completados» con quién y cuándo");
+    const readyHref = await card(staff, "E2E anillo talla 7").getByRole("link", { name: "Avisar que está listo" }).getAttribute("href");
+    const text = decodeURIComponent(readyHref.split("?text=")[1] ?? "");
+    log(
+      readyHref.startsWith("https://wa.me/525511112222?text=") && text.startsWith("Hola Lucía,") && text.includes(folio) && !text.includes("anillo"),
+      `«Avisar que está listo» → WhatsApp con mensaje sin la nota interna: «${text}»`,
+    );
     await staff.getByRole("button", { name: "Deshacer" }).click();
     await card(staff, "E2E anillo talla 7").waitFor({ state: "detached" });
     await openTab(staff, "Hoy");

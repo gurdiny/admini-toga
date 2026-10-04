@@ -49,7 +49,7 @@ export default async function SupplierPage({ params }: PageProps<"/proveedores/[
 
   return (
     <>
-      <Link href="/proveedores" className="text-muted-foreground mb-3 inline-flex items-center gap-1 text-sm">
+      <Link href="/proveedores" className="text-muted-foreground mb-1 inline-flex min-h-10 items-center gap-1 text-sm">
         <ArrowLeft className="size-4" aria-hidden />
         Proveedores
       </Link>

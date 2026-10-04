@@ -188,7 +188,7 @@ function SupplierForm({
 
           {!isEdit && (
             <fieldset className="bg-muted/50 space-y-4 rounded-lg border p-4">
-              <label className="flex items-center gap-3 font-bold">
+              <label className="flex min-h-11 items-center gap-3 font-bold">
                 <input type="checkbox" className="accent-toga-green-strong size-5" checked={values.owes} onChange={(e) => set("owes", e.target.checked)} />
                 Ya le debo
               </label>

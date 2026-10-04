@@ -202,7 +202,7 @@ function ReminderForm({ reminder, onDone }: { reminder?: ReminderFormValues; onD
           </Field>
           <fieldset className="space-y-1.5">
             <legend className="mb-1.5 text-sm font-medium">Prioridad</legend>
-            <div className="bg-muted grid h-11 grid-cols-2 gap-1 rounded-full p-1" role="radiogroup" aria-label="Prioridad">
+            <div className="bg-muted grid h-12 grid-cols-2 gap-1 rounded-full p-1" role="radiogroup" aria-label="Prioridad">
               {(["NORMAL", "ALTA"] as const).map((p) => (
                 <button
                   key={p}

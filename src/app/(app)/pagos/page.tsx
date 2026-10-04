@@ -139,7 +139,7 @@ export default async function PaymentsPage({ searchParams }: PageProps<"/pagos">
                 <li key={p.id} className="flex items-start gap-2 py-3 pr-1 pl-4">
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex items-baseline justify-between gap-3">
-                      <Link href={`/proveedores/${p.supplierId}`} className="truncate font-bold">
+                      <Link href={`/proveedores/${p.supplierId}`} className="-my-2 truncate py-2 font-bold">
                         {p.supplierName}
                       </Link>
                       <span className="text-base font-bold whitespace-nowrap tabular-nums">{formatMoney(p.amount, p.currency)}</span>
@@ -248,7 +248,8 @@ function Kpi({
 function Breakdown({ title, rows, total }: { title: string; rows: BreakdownRow[]; total: string }) {
   const max = Number(rows[0]?.total ?? 0) || 1;
   return (
-    <div className="bg-card shadow-toga rounded-2xl p-4">
+    // min-w-0: dentro del grid, sin esto los nombres largos estiran la tarjeta más que la pantalla.
+    <div className="bg-card shadow-toga min-w-0 rounded-2xl p-4">
       <h3 className="mb-3 text-sm font-bold">{title}</h3>
       <ul className="space-y-2.5">
         {rows.slice(0, 6).map((row) => (

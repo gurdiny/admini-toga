@@ -44,16 +44,25 @@ export function ReminderList({ items, showDate }: Props) {
         toast.error(result.error);
         return;
       }
-      toast.success(completed ? `Listo: ${item.client.name}` : `${item.client.name} vuelve a pendientes`, {
-        action: {
-          label: "Deshacer",
-          onClick: () =>
-            startTransition(async () => {
-              const undo = await toggleCompleted({ id: item.id, completed: !completed });
-              if (!undo.ok) toast.error(undo.error);
-            }),
-        },
-      });
+      const undo = {
+        label: "Deshacer",
+        onClick: () =>
+          startTransition(async () => {
+            const result = await toggleCompleted({ id: item.id, completed: !completed });
+            if (!result.ok) toast.error(result.error);
+          }),
+      };
+      const readyUrl = item.readyUrl;
+      if (completed && readyUrl) {
+        // Recién terminado: lo natural es avisarle al cliente que ya puede pasar.
+        toast.success(`Listo: ${item.client.name}`, {
+          duration: 10000,
+          action: { label: "Avisar por WhatsApp", onClick: () => window.open(readyUrl, "_blank", "noopener") },
+          cancel: undo,
+        });
+      } else {
+        toast.success(completed ? `Listo: ${item.client.name}` : `${item.client.name} vuelve a pendientes`, { action: undo });
+      }
     });
   }
 
@@ -88,16 +97,15 @@ function ReminderCard({
   return (
     <li
       className={cn(
-        "bg-card shadow-toga flex items-start gap-3 rounded-2xl pt-3 pr-1 pb-1 pl-3 transition-opacity",
+        "bg-card shadow-toga flex items-start gap-3 rounded-2xl pt-3 pr-1 pl-3",
         urgent && "ring-destructive/40 ring-1",
-        done && "opacity-70",
       )}
     >
       <ReminderCheckbox item={item} onToggle={onToggle} />
 
       <div className="min-w-0 flex-1 space-y-1.5 pt-0.5">
         <div className="flex items-start justify-between gap-2">
-          <p className={cn("text-base leading-snug font-bold", done && "line-through decoration-1")}>{item.client.name}</p>
+          <p className={cn("text-base leading-snug font-bold", done && "text-muted-foreground line-through decoration-1")}>{item.client.name}</p>
           {urgent && (
             <Badge variant="destructive" className="shrink-0">
               Alta
@@ -105,7 +113,7 @@ function ReminderCard({
           )}
         </div>
         <ClientTags item={item} />
-        <p className="line-clamp-2 text-sm whitespace-pre-line">{item.note}</p>
+        <p className={cn("line-clamp-2 text-sm whitespace-pre-line", done && "text-muted-foreground")}>{item.note}</p>
         <WhenText item={item} showDate={showDate} />
         {done && item.completedAtLabel && (
           <p className="text-toga-green-strong text-xs">
@@ -113,10 +121,13 @@ function ReminderCard({
             {item.completedByName && ` por ${item.completedByName}`}
           </p>
         )}
-        <Button type="button" variant="ghost" size="sm" className="text-toga-pink-strong -ml-3 font-bold" onClick={() => setViewing(true)}>
-          Ver detalle
-          <ChevronRight aria-hidden />
-        </Button>
+        <div className="flex flex-wrap items-center gap-x-1 gap-y-2 pb-2">
+          <Button type="button" variant="ghost" size="sm" className="text-toga-pink-strong -ml-3 font-bold" onClick={() => setViewing(true)}>
+            Ver detalle
+            <ChevronRight aria-hidden />
+          </Button>
+          {done && item.readyUrl && <ReadyButton url={item.readyUrl} size="sm" />}
+        </div>
       </div>
 
       <RowMenu
@@ -183,8 +194,8 @@ function ReminderCheckbox({ item, onToggle }: { item: ReminderRow; onToggle: (co
 
 function ClientTags({ item }: { item: ReminderRow }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
-      <span className="bg-muted inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-xs font-bold tracking-wide">
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="bg-muted inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-bold">
         <Hash className="size-3" aria-hidden />
         {formatCode("client", item.client.code)}
       </span>
@@ -194,10 +205,13 @@ function ClientTags({ item }: { item: ReminderRow }) {
           target="_blank"
           rel="noopener noreferrer"
           aria-label={`WhatsApp a ${item.client.name}: ${formatPhone(item.client.phone)}`}
-          className="bg-toga-green-soft text-toga-green-strong inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-xs font-bold"
+          // El chip se ve de 32 px, pero el área que se toca mide 40.
+          className="-my-1 inline-flex h-10 items-center"
         >
-          <MessageCircle className="size-3.5" aria-hidden />
-          {formatPhone(item.client.phone)}
+          <span className="bg-toga-green-soft text-toga-green-strong inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-bold">
+            <MessageCircle className="size-3.5" aria-hidden />
+            {formatPhone(item.client.phone)}
+          </span>
         </a>
       )}
     </div>
@@ -286,22 +300,23 @@ function ReminderDetailDialog({
           )}
         </dl>
 
-        <DialogFooter>
+        {/* Siempre en columna: la acción principal arriba y a todo lo ancho, Editar/Borrar abajo. */}
+        <DialogFooter className="sm:flex-col-reverse sm:justify-start">
           {(onEdit || onDelete) && (
-            <div className="flex gap-2 sm:mr-auto">
+            <div className="grid grid-cols-2 gap-2">
               {onEdit && (
-                <Button type="button" variant="outline" size="lg" className="flex-1 sm:h-10 sm:text-sm" onClick={onEdit}>
+                <Button type="button" variant="outline" size="lg" className={cn("sm:h-10 sm:text-sm", !onDelete && "col-span-2")} onClick={onEdit}>
                   <Pencil aria-hidden /> Editar
                 </Button>
               )}
               {onDelete && (
-                <Button type="button" variant="outline" size="lg" className="text-destructive flex-1 sm:h-10 sm:text-sm" onClick={onDelete}>
+                <Button type="button" variant="outline" size="lg" className={cn("text-destructive sm:h-10 sm:text-sm", !onEdit && "col-span-2")} onClick={onDelete}>
                   <Trash2 aria-hidden /> Borrar
                 </Button>
               )}
             </div>
           )}
-          <Button type="button" variant={done ? "outline" : "brand"} size="lg" className="sm:h-10 sm:text-sm" onClick={() => onToggle(!done)}>
+          <Button type="button" variant={done ? "outline" : "brand"} size="lg" className="w-full sm:h-10 sm:text-sm" onClick={() => onToggle(!done)}>
             {done ? (
               <>
                 <Undo2 aria-hidden /> Regresar a pendientes
@@ -312,6 +327,7 @@ function ReminderDetailDialog({
               </>
             )}
           </Button>
+          {done && item.readyUrl && <ReadyButton url={item.readyUrl} size="lg" className="w-full sm:h-10 sm:text-sm" />}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -324,5 +340,16 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
       <dt className="text-muted-foreground">{label}</dt>
       <dd className="min-w-0">{children}</dd>
     </div>
+  );
+}
+
+/** Abre WhatsApp con el aviso «tu pedido ya está listo» (plantilla de la configuración). */
+function ReadyButton({ url, size, className }: { url: string; size: "sm" | "lg"; className?: string }) {
+  return (
+    <Button asChild size={size} className={cn("bg-toga-green-strong hover:bg-toga-green-strong/90 text-white", className)}>
+      <a href={url} target="_blank" rel="noopener noreferrer">
+        <MessageCircle aria-hidden /> Avisar que está listo
+      </a>
+    </Button>
   );
 }

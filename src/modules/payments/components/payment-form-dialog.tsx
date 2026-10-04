@@ -265,7 +265,7 @@ function PaymentForm({
                 </Select>
               </Field>
             ) : (
-              <button type="button" className="text-muted-foreground text-sm underline underline-offset-4" onClick={() => setShowCurrency(true)}>
+              <button type="button" className="text-muted-foreground inline-flex min-h-10 items-center text-sm underline underline-offset-4" onClick={() => setShowCurrency(true)}>
                 ¿En dólares?
               </button>
             )}

@@ -3,8 +3,10 @@ import { db } from "@/lib/db";
 import { dbToDay, formatForDisplay, type DayKey } from "@/lib/date";
 import { parseCode } from "@/lib/codes";
 import { toNameKey } from "@/lib/normalize";
+import { getSettings } from "@/lib/settings";
 import type { Prisma, Priority } from "@/generated/prisma/client";
 import { BUCKETS, placementWhere, type Bucket, type Placement } from "./buckets";
+import { readyWhatsAppUrl } from "./whatsapp";
 
 // Todo lo que sale de aquí es serializable (días como "yyyy-MM-dd", instantes
 // ya formateados en hora de México) para pasarlo a Client Components.
@@ -27,6 +29,8 @@ export type ReminderItem = {
   createdAt: Date;
   /** "4 oct, 10:15" en hora de México. */
   createdAtLabel: string;
+  /** WhatsApp con el aviso de «ya está listo» (null si el cliente no tiene teléfono). */
+  readyUrl: string | null;
   client: ClientOption;
 };
 
@@ -43,16 +47,19 @@ const ORDER: Record<Placement, Prisma.OrderReminderOrderByWithRelationInput[]> =
 };
 
 export async function getReminders(placement: Placement, now: Date = new Date()): Promise<ReminderItem[]> {
-  const rows = await db.orderReminder.findMany({
-    where: placementWhere(placement, now),
-    orderBy: ORDER[placement],
-    take: placement === "completados" ? 100 : undefined,
-    include: {
-      client: { select: CLIENT_FIELDS },
-      completedBy: { select: { name: true } },
-      createdBy: { select: { name: true } },
-    },
-  });
+  const [rows, settings] = await Promise.all([
+    db.orderReminder.findMany({
+      where: placementWhere(placement, now),
+      orderBy: ORDER[placement],
+      take: placement === "completados" ? 100 : undefined,
+      include: {
+        client: { select: CLIENT_FIELDS },
+        completedBy: { select: { name: true } },
+        createdBy: { select: { name: true } },
+      },
+    }),
+    getSettings(),
+  ]);
   return rows.map((r) => ({
     id: r.id,
     targetDate: dbToDay(r.targetDate),
@@ -66,6 +73,7 @@ export async function getReminders(placement: Placement, now: Date = new Date())
     createdByName: r.createdBy.name,
     createdAt: r.createdAt,
     createdAtLabel: formatForDisplay(r.createdAt, "d MMM, HH:mm"),
+    readyUrl: readyWhatsAppUrl(settings.readyMessage, r.client, settings.businessName),
     client: r.client,
   }));
 }

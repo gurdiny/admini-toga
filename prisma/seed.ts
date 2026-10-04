@@ -7,6 +7,7 @@ import { hashPassword } from "better-auth/crypto";
 import { db } from "../src/lib/db";
 import { addDays, dayToDb, getToday } from "../src/lib/date";
 import { normalizePhoneMX, toNameKey } from "../src/lib/normalize";
+import { DEFAULT_READY_MESSAGE } from "../src/modules/reminders/whatsapp";
 import { Prisma } from "../src/generated/prisma/client";
 
 // Contraseña de los usuarios de ejemplo. Solo para desarrollo.
@@ -115,6 +116,7 @@ async function main() {
     defaultCurrency: "MXN",
     defaultPaymentMethod: "EFECTIVO", // casi todos los pagos son en efectivo
     overdueLookbackDays: 30,
+    readyMessage: DEFAULT_READY_MESSAGE, // aviso por WhatsApp de pedido listo
     modules: { payments: true, reminders: true },
   };
   for (const [key, value] of Object.entries(settings)) {

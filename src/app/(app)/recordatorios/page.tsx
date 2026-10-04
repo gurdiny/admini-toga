@@ -75,14 +75,14 @@ export default async function RemindersPage({ searchParams }: PageProps<"/record
               scroll={false}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex min-h-14 flex-col items-center justify-center rounded-xl px-1 leading-tight",
+                "flex min-h-14 min-w-0 flex-col items-center justify-center rounded-xl px-0.5 leading-tight",
                 active && "bg-card shadow-toga-sm",
                 alert && "text-destructive",
                 alert && !active && "bg-destructive/10",
               )}
             >
               <span className={cn("text-lg tabular-nums", active || alert ? "font-bold" : "text-muted-foreground")}>{counts[b]}</span>
-              <span className={cn("text-[12px]", active && "font-bold")}>{BUCKET_LABELS[b]}</span>
+              <span className={cn("text-[11px] min-[380px]:text-[12px]", active && "font-bold")}>{BUCKET_LABELS[b]}</span>
             </Link>
           );
         })}

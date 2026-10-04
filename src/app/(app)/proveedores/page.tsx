@@ -57,7 +57,7 @@ export default async function SuppliersPage({ searchParams }: PageProps<"/provee
         <p className="mb-3 text-sm">
           <Link
             href={{ pathname: "/proveedores", query: { ...(search && { q: search }), ...(!showInactive && { inactivos: "1" }) } }}
-            className="text-muted-foreground underline underline-offset-4"
+            className="text-muted-foreground inline-flex min-h-10 items-center underline underline-offset-4"
           >
             {showInactive ? "Ocultar desactivados" : "Ver también desactivados"}
           </Link>
