@@ -143,6 +143,7 @@ Variables: [.env.example](.env.example) documenta todas. Se usa el puerto 5433 p
 - **Migraciones que borran columnas**: `migrate dev` no corre sin terminal interactiva. Generar el SQL con `npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`, guardarlo en `prisma/migrations/<fecha>_<nombre>/migration.sql`, revisarlo y aplicar con `npx prisma migrate dev`; luego `npm run db:generate`.
 - **Probar en el celular** (desarrollo): `allowedDevOrigins` en `next.config.ts` y `trustedOrigins` de Better Auth aceptan IPs de red local solo en desarrollo. WSL en modo NAT no es alcanzable desde el teléfono: hace falta `networkingMode=mirrored` en `%UserProfile%\.wslconfig` y abrir el puerto 3000 en el firewall de Windows.
 - Avisos de hidratación con `caret-color` vienen de Playwright (capturas) y con `bis_*`/`cz-shortcut-listen` de extensiones del navegador: no son errores de la app.
+- `window.ethereum.selectedAddress` («1 Issue» en el celular) lo inyecta Brave Wallet: no es de la app. En iPhone, Brave puede agrandar el texto de la barra inferior aunque el CSS calcule 11 px (medido): las etiquetas usan `truncate` para no salirse.
 - Scripts sueltos que importan módulos con `server-only`: `npx tsx --conditions=react-server archivo.ts`.
 - shadcn/ui: estilo `radix-nova`, componentes con `npx shadcn@latest add <componente>`.
 - Para exportar a Excel usar `exceljs`: el paquete `xlsx` publicado en npm está desactualizado y con vulnerabilidades conocidas.

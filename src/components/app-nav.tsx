@@ -109,7 +109,7 @@ export function BottomNav({ isOwner, reminders, userName, options, defaultMethod
               )}
             >
               <Menu className="size-6" aria-hidden />
-              Menú
+              <span className="block max-w-full truncate px-0.5">Menú</span>
             </button>
           </li>
         </ul>
@@ -169,7 +169,7 @@ function TabLink({
         href={href}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "flex h-16 flex-col items-center justify-center gap-0.5 text-[10px] tracking-tight min-[380px]:text-[11px] min-[380px]:tracking-normal",
+          "flex h-16 min-w-0 flex-col items-center justify-center gap-0.5 text-[10px] tracking-tight min-[380px]:text-[11px] min-[380px]:tracking-normal",
           active ? "text-foreground font-bold" : "text-muted-foreground",
         )}
       >
@@ -177,7 +177,8 @@ function TabLink({
           <Icon className={cn("size-6", active && "text-toga-pink-strong")} aria-hidden />
           {badge && <CountBadge badge={badge} className="absolute -top-1.5 left-4" />}
         </span>
-        {label}
+        {/* Si el navegador agranda la letra (Brave en iPhone), se recorta con «…» en vez de salirse. */}
+        <span className="block max-w-full truncate px-0.5">{label}</span>
       </Link>
     </li>
   );
