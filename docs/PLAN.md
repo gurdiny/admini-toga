@@ -1,6 +1,6 @@
 # Plan de Desarrollo por Fases — Sistema de Joyería
 
-Oct 3, 2026 · @GERA URIAS
+3 oct 2026 · @GERA URIAS · v2.1 (4 oct 2026: hosting en VPS propio, Postgres en Docker, User compatible con Better Auth)
 
 ## Qué faltaba en el plan original
 
@@ -23,17 +23,17 @@ El plan v1.0 resuelve bien la captura y los reportes, pero deja fuera doce cosas
 
 ## Decisiones antes de escribir código
 
-Define estas cinco cosas tú, no Claude Code. Si las deja abiertas, improvisa y después hay que deshacer.
-
-| Decisión | Recomendación | Por qué |
+| Decisión | Elegido | Por qué |
 | --- | --- | --- |
-| Hosting | Vercel, plan gratuito | Deploy desde Git, sin servidor que administrar |
-| Base de datos | Neon o Supabase, plan gratuito | PostgreSQL administrado con respaldo automático; el gratuito aguanta años a tu volumen |
-| Autenticación | Auth.js (NextAuth) con credenciales | Dos usuarios, sin costo, sin proveedor externo |
-| Dominio | Opcional al inicio | El subdominio de Vercel funciona; un dominio cuesta \~$200 MXN al año |
+| Hosting | VPS propio con Docker: app Next.js + PostgreSQL + Caddy | Ya tienes el VPS. La base nunca se expone a internet: la app la alcanza por la red interna de Docker. Caddy da HTTPS automático |
+| Base de datos | PostgreSQL 17. En desarrollo, el contenedor de `docker-compose.yml`; en producción, contenedor en el VPS | Mismo motor y misma versión en los dos lados: lo que migra en local migra igual en producción |
+| Autenticación | Better Auth con email y contraseña, registro público deshabilitado | Auth.js v5 sigue en beta y sus propios mantenedores recomiendan Better Auth para proyectos nuevos |
+| Dominio | Un subdominio apuntando al VPS | Caddy necesita un dominio para emitir el certificado HTTPS |
 | Moneda | MXN, con campo de moneda desde el día uno | Si algún día compras oro en USD, el esquema ya lo soporta |
 
-Costo real esperado: $0 al mes mientras sean dos usuarios. Si algún día necesitas plan pago de base de datos, son unos $19 USD mensuales.
+Costo real esperado: $0 adicional; corre en el VPS que ya pagas.
+
+Lo que cambia por no usar una base administrada: **los respaldos son responsabilidad tuya**. La Fase 8 los automatiza, pero hay que probar la restauración al menos una vez.
 
 Una regla que conviene fijar desde ahora: todas las fechas se guardan en UTC y se muestran en `America/Mexico_City`. Nunca se guarda una fecha ya convertida.
 
@@ -41,11 +41,21 @@ Una regla que conviene fijar desde ahora: todas las fechas se guardan en UTC y s
 
 Antes de cualquier pantalla. Si esto queda mal, todo lo demás se arrastra.
 
+Requisitos previos: Node.js 24 LTS (Prisma 7 pide 20.19 o superior) y Docker funcionando en WSL. Levanta la base antes de empezar: `docker compose up -d`.
+
 ```
-claude "Crea un proyecto Next.js 15 con App Router, TypeScript estricto, Tailwind CSS v4, Shadcn UI, Lucide React y Prisma con PostgreSQL. Estructura las carpetas por dominio, no por tipo de archivo: /src/modules/payments, /src/modules/reminders, /src/modules/admin, cada uno con sus propios actions, components y schemas; /src/lib para utilidades compartidas; /src/components/ui solo para Shadcn. Configura .env.example con DATABASE_URL, AUTH_SECRET y APP_TIMEZONE=America/Mexico_City. Agrega Zod, date-fns y date-fns-tz. Inicializa git con un .gitignore que excluya .env y /prisma/*.db. Usa prisma migrate dev para todo cambio de esquema, nunca db push. Crea un README con los comandos de arranque."
+claude "Crea un proyecto Next.js 16 con App Router, TypeScript estricto, Tailwind CSS v4, Shadcn UI, Lucide React y Prisma 7 con PostgreSQL. El repositorio ya existe con CLAUDE.md, .gitignore, .gitattributes, docker-compose.yml, .env.example y .env: create-next-app no corre en un directorio con archivos, así que genera el proyecto en un directorio temporal, mueve los archivos aquí y fusiona el .gitignore sin perder sus reglas.
+
+Estructura las carpetas por dominio, no por tipo de archivo: /src/modules/payments, /src/modules/reminders, /src/modules/admin, cada uno con sus propios actions, components y schemas; /src/lib para utilidades compartidas; /src/components/ui solo para Shadcn.
+
+Configuración de Prisma 7, que cambió respecto a v6: el generador usa provider = 'prisma-client' con un output explícito en ./src/generated/prisma; crea prisma.config.ts con import 'dotenv/config', la URL de la base, la ruta de migraciones y el comando de seed, porque el schema ya no lleva datasource.url y Prisma 7 ya no carga .env solo; instala el driver adapter @prisma/adapter-pg junto con pg, ahora obligatorio para PostgreSQL, e instancia PrismaClient con ese adaptador en /src/lib/db.ts como singleton.
+
+En next.config.ts activa output: 'standalone' para poder empaquetar la app en Docker en la Fase 8.
+
+Agrega Zod, date-fns y date-fns-tz. Agrega scripts npm: db:up (docker compose up -d), db:down, db:migrate (prisma migrate dev), db:generate, db:seed, db:studio. Usa prisma migrate dev para todo cambio de esquema, nunca db push. Crea un README con los comandos de arranque."
 ```
 
-Qué verificar antes de seguir: `npm run dev` levanta sin errores, `npx prisma migrate dev` corre limpio, y la carpeta `/src/modules` existe con las tres subcarpetas vacías.
+Qué verificar antes de seguir: `npm run dev` levanta sin errores, `npx prisma migrate dev` corre limpio contra el Postgres de Docker, y la carpeta `/src/modules` existe con las tres subcarpetas vacías.
 
 La estructura por módulos es lo que hace escalable el proyecto. Agregar inventario mañana será crear `/src/modules/inventory` sin tocar nada más.
 
@@ -56,7 +66,7 @@ La fase más importante. Cambiar el esquema con datos reales adentro es caro; va
 ```
 claude "Diseña el esquema Prisma completo con estos modelos:
 
-User: id, email único, passwordHash, name, role (enum OWNER|STAFF), isActive, createdAt.
+User, compatible con Better Auth: id, name, email único, emailVerified, image opcional, role (enum OWNER|STAFF, default STAFF), isActive, createdAt, updatedAt. El hash de la contraseña NO va en User: Better Auth lo guarda en Account.password. Agrega los modelos que Better Auth requiere (Session, Account, Verification) con los campos exactos de su documentación actual o generados con su CLI.
 
 Supplier: id, name único, category (relación), phone, notes, isActive, createdAt. Reemplaza el supplierName de texto libre.
 
@@ -74,7 +84,7 @@ AppSetting: id, key único, value Json. Para configuración editable desde el pa
 
 Índices: SupplierPayment en [date, supplierId] y [deletedAt]; OrderReminder en [targetDate, isCompleted] y [clientId]; Client en [phone] y [folio].
 
-Todo borrado es lógico mediante deletedAt; nunca uses delete físico. Crea un seed con 2 usuarios, 8 categorías típicas de joyería, 5 proveedores y 10 registros de ejemplo."
+Todo borrado es lógico mediante deletedAt; nunca uses delete físico. Crea un seed con 2 usuarios (con contraseña creada a través de la API de Better Auth, no insertando hashes a mano), 8 categorías típicas de joyería, 5 proveedores y 10 registros de ejemplo."
 ```
 
 Qué verificar: la migración corre, el seed llena la base, y `npx prisma studio` muestra las relaciones conectadas.
@@ -86,10 +96,20 @@ Los campos que hoy parecen de más — `orderId` en el pago, `currency`, `AppSet
 Dos roles bastan: dueño y empleado. El empleado captura; el dueño además ve totales, edita catálogos y revisa la auditoría.
 
 ```
-claude "Implementa autenticación con Auth.js v5 usando proveedor de credenciales contra el modelo User, con bcrypt para el hash. Crea /login con formulario simple y manejo de error visible. Agrega middleware que proteja todas las rutas excepto /login. Define un helper requireRole(role) para Server Actions que lance error si el usuario no tiene permiso, y un helper getCurrentUser() para leer la sesión en servidor. El rol OWNER accede a todo; STAFF accede a pagos y recordatorios pero no a /admin ni a los totales del dashboard. Crea un wrapper withAudit() que envuelva toda Server Action de escritura y registre automáticamente en AuditLog el usuario, la acción, la entidad y el diff de cambios. La sesión dura 30 días para no pedir contraseña cada día en el mostrador."
+claude "Implementa autenticación con Better Auth sobre PostgreSQL y Prisma, con email y contraseña, sin proveedores sociales. Variables: BETTER_AUTH_SECRET y BETTER_AUTH_URL (ya están en .env.example).
+
+Deshabilita el registro público (disableSignUp): los usuarios solo los crea un OWNER desde /admin/usuarios o el seed. Usa los campos role e isActive del modelo User como additionalFields; un usuario con isActive = false no puede iniciar sesión. Sesión de 30 días para no pedir contraseña cada día en el mostrador.
+
+Crea /login con formulario simple y mensaje de error visible.
+
+Protección de rutas: Next.js 16 renombró middleware.ts a proxy.ts y ahora corre en runtime Node. Usa proxy.ts únicamente para redirigir a /login a quien no trae sesión, nunca como barrera de seguridad: por CVE-2025-29927 el middleware es evadible. La verificación real de sesión y de rol va dentro de cada layout de servidor y al inicio de cada Server Action.
+
+Helpers: getCurrentUser() para leer la sesión en servidor y requireRole(role) que lance error si no hay permiso. OWNER accede a todo; STAFF accede a pagos y recordatorios pero no a /admin ni a los totales del dashboard.
+
+Crea un wrapper withAudit() que envuelva toda Server Action de escritura y registre en AuditLog el usuario, la acción, la entidad y el diff de cambios."
 ```
 
-Qué verificar: entrar como STAFF y confirmar que `/admin` redirige, y que al crear un pago aparece un renglón nuevo en `AuditLog`.
+Qué verificar: entrar como STAFF y confirmar que `/admin` redirige; intentar registrarse desde fuera y confirmar que falla; al crear un pago aparece un renglón nuevo en `AuditLog`.
 
 El `withAudit()` es el detalle que más se agradece después. Sin él, cuando un total no cuadre, no hay forma de saber qué pasó.
 
@@ -168,7 +188,7 @@ claude "Construye /admin, accesible solo para rol OWNER, con navegación lateral
 
 /admin/clientes — listado de clientes con búsqueda, historial de pedidos por cliente y total pagado asociado. Fusionar duplicados cuando el mismo cliente quedó capturado dos veces.
 
-/admin/usuarios — alta, baja y cambio de rol. Resetear contraseña. No permitir desactivar al último OWNER.
+/admin/usuarios — alta, baja y cambio de rol. Resetear contraseña. No permitir desactivar al último OWNER. El alta de usuarios pasa por la API de administración de Better Auth, ya que el registro público está deshabilitado.
 
 /admin/auditoria — tabla de AuditLog con filtros por usuario, entidad y rango de fechas, mostrando el diff legible de cada cambio. Paginada.
 
@@ -190,7 +210,7 @@ claude "Agrega tres capacidades transversales:
 
 1. Búsqueda global accesible con Cmd+K y desde un ícono en el encabezado. Busca clientes por nombre, folio o teléfono, y pagos por concepto o proveedor. Resultados agrupados por tipo, con navegación por teclado. Es la función que convierte el sistema en algo consultable.
 
-2. Exportación a CSV y Excel desde /pagos y /recordatorios, respetando los filtros activos. Incluye encabezados en español y formato de fecha legible. El archivo se genera en servidor con la librería xlsx.
+2. Exportación a CSV y Excel desde /pagos y /recordatorios, respetando los filtros activos. Incluye encabezados en español y formato de fecha legible. El archivo se genera en servidor con exceljs, no con xlsx: ese paquete está sin mantenimiento en npm.
 
 3. Dashboard en la raíz / con el estado del día: pendientes para hoy, pendientes para mañana, atrasados, total pagado del mes y gráfica de gasto por categoría del mes en curso con Recharts. Para rol STAFF oculta los montos y muestra solo los pendientes.
 
@@ -201,29 +221,33 @@ Qué verificar: busca un folio y confirma que llega al cliente en menos de dos s
 
 La vista por cliente es la que abre la puerta a todo lo demás: cuando tengas ahí el costo y el precio de venta, tienes margen por pieza sin haber cambiado el esquema.
 
-## Fase 8 — Deploy, respaldos y operación
+## Fase 8 — Deploy en VPS, respaldos y operación
 
 Sin esta fase tienes un proyecto bonito en tu computadora, no un sistema.
 
 ```
-claude "Prepara el proyecto para producción:
+claude "Prepara el proyecto para producción en un VPS con Docker:
 
-1. Configura el deploy en Vercel conectado al repositorio de Git, con las variables de entorno documentadas y separación entre base de datos de desarrollo y de producción.
+1. Dockerfile multi-stage para la app (Node 24, output standalone de Next.js, usuario no root). Al arrancar el contenedor corre prisma migrate deploy antes de iniciar el servidor.
 
-2. Agrega un script npm run backup que exporte toda la base a JSON con fecha en el nombre, y documenta en el README cómo correrlo y dónde guardar el archivo.
+2. docker-compose.prod.yml con tres servicios: app, db (postgres:17-alpine con volumen persistente) y caddy (reverse proxy con HTTPS automático para el dominio en la variable APP_DOMAIN). Postgres SIN puertos publicados: solo accesible por la red interna de Docker. Variables desde un .env.production que no se versiona; documenta cada una en .env.example.
 
-3. Agrega una ruta /api/health que verifique conexión a la base y devuelva estado.
+3. Servicio de respaldo: pg_dump diario en formato custom (-Fc) con fecha en el nombre, retención de 14 días en el VPS, y un script para copiar los respaldos fuera del VPS (rclone a Google Drive). Agrega también npm run backup para generar un respaldo manual.
 
-4. Configura una página de error global y una de 404 en español, con un enlace de regreso al inicio.
+4. Script de restauración (pg_restore) y documentación paso a paso en el README, incluyendo cómo probar la restauración en local contra el Postgres de docker-compose.yml.
 
-5. Agrega validación de variables de entorno al arranque con Zod: si falta DATABASE_URL o AUTH_SECRET, la app falla con un mensaje claro en vez de romperse a medias.
+5. Ruta /api/health que verifique conexión a la base y devuelva estado; úsala como healthcheck del contenedor app.
 
-6. Escribe pruebas con Vitest para los helpers de zona horaria y los cálculos de agregación de pagos. Son las dos cosas donde un error pasa desapercibido.
+6. Página de error global y una de 404 en español, con un enlace de regreso al inicio.
 
-7. Documenta en el README el procedimiento de respaldo, el de restauración y cómo crear el primer usuario OWNER en una base vacía."
+7. Validación de variables de entorno al arranque con Zod: si falta DATABASE_URL, BETTER_AUTH_SECRET o BETTER_AUTH_URL, la app falla con un mensaje claro en vez de romperse a medias.
+
+8. Pruebas con Vitest para los helpers de zona horaria y los cálculos de agregación de pagos. Son las dos cosas donde un error pasa desapercibido.
+
+9. Documenta en el README: primer deploy en el VPS, cómo actualizar (git pull + docker compose up -d --build), cómo crear el primer usuario OWNER en una base vacía, y el procedimiento de respaldo y restauración."
 ```
 
-Rutina mínima una vez en producción: respaldo semanal descargado a una carpeta de Drive, y revisar la auditoría cuando un total no cuadre. Neon y Supabase ya hacen respaldo automático, pero un respaldo que no has probado restaurar no cuenta como respaldo.
+Rutina mínima una vez en producción: verificar cada semana que el respaldo del día llegó a Drive, probar una restauración en local una vez al mes, y revisar la auditoría cuando un total no cuadre. Un respaldo que no has probado restaurar no cuenta como respaldo.
 
 ## Fase 9 — Ganchos para crecer después
 

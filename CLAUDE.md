@@ -20,13 +20,14 @@ Al cerrar una fase: marcarla aquí y hacer commit (`feat(fase-N): ...`).
 
 ## Stack
 
-- Next.js (App Router) + TypeScript estricto
+- Next.js 16 (App Router, `output: 'standalone'`) + TypeScript estricto, Node 24 LTS
 - Tailwind CSS v4 + shadcn/ui + lucide-react
-- Prisma + PostgreSQL (Neon o Supabase)
-- Auth.js con credenciales + bcrypt
-- Zod, date-fns + zona horaria, Recharts, exportación a Excel
+- Prisma 7 (`prisma-client` → `src/generated/prisma`, `prisma.config.ts`, `@prisma/adapter-pg`)
+- PostgreSQL 17: en desarrollo, contenedor de [docker-compose.yml](docker-compose.yml); en producción, contenedor en el VPS
+- Better Auth (email + contraseña, registro público deshabilitado)
+- Zod, date-fns + date-fns-tz, Recharts, exceljs
 - Vitest para pruebas
-- Hosting: Vercel
+- Hosting: VPS propio con Docker (app + Postgres + Caddy). La base nunca publica puertos en producción
 
 ## Reglas no negociables
 
@@ -37,6 +38,7 @@ Al cerrar una fase: marcarla aquí y hacer commit (`feat(fase-N): ...`).
 5. **Server Actions** siguen siempre este orden: validar con Zod → verificar rol (`requireRole`) → ejecutar → auditar (`withAudit`) → `revalidatePath` → devolver `Result<T>`. No lanzar excepciones hacia el cliente.
 6. **Catálogos administrables**: categorías, proveedores y configuración viven en la base (`Category`, `Supplier`, `AppSetting`), no en enums ni constantes del código.
 7. **Roles**: `OWNER` ve todo; `STAFF` captura pagos y recordatorios pero no ve montos totales ni `/admin`. Ocultar en UI no basta: se valida en servidor.
+8. **Seguridad de rutas**: `proxy.ts` solo redirige a `/login`; nunca es la barrera de seguridad (CVE-2025-29927). La sesión y el rol se verifican en cada layout de servidor y al inicio de cada Server Action.
 
 ## Estructura
 
@@ -72,19 +74,26 @@ Un módulo nuevo (inventario, ventas…) es una carpeta nueva en `src/modules/`,
 
 ## Comandos
 
-> Se completan al terminar la Fase 0.
+> Los scripts `npm run db:*` se crean en la Fase 0.
 
 ```bash
+docker compose up -d                # levantar Postgres local (requiere Docker en WSL)
+docker compose down                 # detenerlo (los datos se conservan)
+docker compose down -v              # detenerlo y BORRAR la base local
 npm run dev                         # servidor local
 npx prisma migrate dev --name xxx   # nueva migración
-npx prisma db seed                  # datos de ejemplo
+npx prisma generate                 # regenerar cliente (Prisma 7 no lo hace solo en todos los casos)
+npx prisma db seed                  # datos de ejemplo (Prisma 7 no lo corre al migrar)
 npx prisma studio                   # explorar la base
 npm run test                        # Vitest
-npm run backup                      # respaldo JSON (Fase 8)
 ```
+
+Variables: [.env.example](.env.example) documenta todas; `.env` local ya existe con credenciales de desarrollo y un `BETTER_AUTH_SECRET` generado. Se usa el puerto 5433 porque 5432 lo ocupa otro contenedor (pgvector-dev). Si 5433 está ocupado, cambiar `DB_PORT` y `DATABASE_URL`.
 
 ## Notas para la Fase 0
 
-- Verificar versiones actuales antes de instalar (Next.js, Prisma, Auth.js, Tailwind) con la documentación oficial; el plan se escribió pensando en Next.js 15 y algunas APIs cambiaron en versiones posteriores (p. ej. `middleware.ts` → `proxy.ts` en Next 16, `prisma.config.ts` y adaptadores de driver en Prisma 7).
-- `create-next-app` se niega a correr en un directorio con archivos ajenos (`CLAUDE.md`). Generar el proyecto en un directorio temporal y mover los archivos aquí, fusionando el `.gitignore` existente.
-- Para exportar a Excel preferir `exceljs`: el paquete `xlsx` publicado en npm está desactualizado y con vulnerabilidades conocidas.
+- `create-next-app` se niega a correr en un directorio con archivos. Generar el proyecto en un directorio temporal y mover los archivos aquí, fusionando el `.gitignore` existente sin perder sus reglas.
+- Consultar la documentación actual (Context7) de Next.js 16, Prisma 7 y Better Auth antes de escribir configuración: sus APIs cambiaron respecto a versiones anteriores.
+- Prisma 7 no carga `.env` automáticamente: `prisma.config.ts` empieza con `import 'dotenv/config'`.
+- Para exportar a Excel usar `exceljs`: el paquete `xlsx` publicado en npm está desactualizado y con vulnerabilidades conocidas.
+- El modelo `User` debe ser compatible con Better Auth: el hash de la contraseña vive en `Account.password`, no en `User`.

@@ -1,0 +1,29 @@
+# Base de datos local para desarrollo.
+# Misma versión mayor que producción (VPS): PostgreSQL 17.
+#   docker compose up -d      levantar
+#   docker compose down       detener (los datos se conservan)
+#   docker compose down -v    detener y BORRAR los datos locales
+name: joyeria
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: joyeria
+      POSTGRES_PASSWORD: joyeria_dev
+      POSTGRES_DB: joyeria
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U joyeria -d joyeria"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
