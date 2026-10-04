@@ -18,7 +18,7 @@ const money = (text) => Number(text.replace(/[^\d.]/g, ""));
     await dialog.getByLabel("Monto").fill(String(amount));
     await dialog.getByLabel("Concepto").fill(concept);
     await dialog.getByRole("combobox", { name: "Categoría" }).click();
-    await page.getByRole("option", { name: "Engaste" }).click();
+    await page.getByRole("option", { name: "Mano de obra" }).click();
     if (day === "ayer") await dialog.getByRole("button", { name: "Ayer" }).click();
     else if (typeof day === "string") await dialog.getByLabel("Fecha del pago").fill(day);
     await dialog.getByRole("button", { name: "Registrar pago" }).click();
@@ -64,7 +64,7 @@ const money = (text) => Number(text.replace(/[^\d.]/g, ""));
     await dialog.getByLabel("Monto").fill("50");
     await dialog.getByLabel("Concepto").fill("E2E primer pago");
     await dialog.getByRole("combobox", { name: "Categoría" }).click();
-    await page.getByRole("option", { name: "Engaste" }).click();
+    await page.getByRole("option", { name: "Mano de obra" }).click();
     await page.screenshot({ path: shots("e2e-pago-form.png") });
     await dialog.getByRole("button", { name: "Registrar pago" }).click();
     await dialog.waitFor({ state: "hidden" });
@@ -84,7 +84,7 @@ const money = (text) => Number(text.replace(/[^\d.]/g, ""));
     // Buscar y ordenar
     // «E2E p» encuentra solo los pagos de esta prueba (no los de proveedores.e2e.cjs).
     await page.goto(`${B}/pagos?rango=semana&q=E2E+p&orden=amount&dir=asc`);
-    const concepts = await page.locator("table tbody tr td:nth-child(4) span.block").allInnerTexts();
+    const concepts = await page.locator("table tbody tr td:nth-child(3) span.block").allInnerTexts();
     log(concepts.join("|") === "E2E primer pago|E2E pago de hoy|E2E pago de ayer", `Buscar «E2E p» + ordenar por monto ↑ → ${concepts.join(", ")}`);
 
     // Borrar

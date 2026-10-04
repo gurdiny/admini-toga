@@ -13,7 +13,7 @@ export function NewSupplierButton({ categories }: { categories: { id: string; na
       categories={categories}
       onSaved={(supplier) => router.push(`/proveedores/${supplier.id}`)}
       trigger={
-        <Button className="h-11 md:h-9">
+        <Button variant="brand">
           <Plus aria-hidden />
           Nuevo proveedor
         </Button>

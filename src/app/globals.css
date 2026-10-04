@@ -13,6 +13,12 @@
   --color-toga-green-strong: var(--toga-accent-strong);
   --color-toga-green-soft: var(--toga-accent-soft);
   --color-toga-pink: var(--toga-pink);
+  --color-toga-pink-strong: var(--toga-pink-strong);
+  --color-toga-pink-strong-hover: var(--toga-pink-strong-hover);
+  --color-toga-pink-soft: var(--toga-pink-soft);
+  /* Sombras de toga.mx */
+  --shadow-toga: 0 10px 30px rgb(0 0 0 / 0.04), 0 1px 2px rgb(0 0 0 / 0.04);
+  --shadow-toga-sm: 0 2px 6px rgb(0 0 0 / 0.08);
   --color-toga-blue: var(--toga-blue);
   --color-toga-violet: var(--toga-violet);
   --color-toga-red: var(--toga-red);
@@ -59,7 +65,10 @@
   --toga-accent: #90ac53;
   --toga-accent-strong: #4f6b24; /* verde para texto: 6.1:1 sobre blanco (#90ac53 no llega a 4.5:1) */
   --toga-accent-soft: #eef3e4;
-  --toga-pink: #d67da1;
+  --toga-pink: #d67da1; /* decorativo: íconos, acentos (2.9:1, no para texto) */
+  --toga-pink-strong: #c23d73; /* botones de acción con texto blanco: 5:1 */
+  --toga-pink-strong-hover: #ae3767;
+  --toga-pink-soft: #fbeef4;
   --toga-blue: #6671ba;
   --toga-violet: #6a5acd;
   --toga-red: #aa3a3e;

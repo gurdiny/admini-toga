@@ -215,10 +215,10 @@ function SupplierForm({
         </form>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onDone} disabled={action.pending}>
+          <Button type="button" variant="ghost" size="lg" onClick={onDone} disabled={action.pending} className="sm:h-10 sm:text-sm">
             Cancelar
           </Button>
-          <Button type="submit" form="supplier-form" disabled={action.pending} className="h-11 sm:h-9">
+          <Button type="submit" variant="brand" size="lg" form="supplier-form" disabled={action.pending} className="sm:h-10 sm:text-sm">
             {action.pending ? "Guardando…" : isEdit ? "Guardar cambios" : "Dar de alta"}
           </Button>
         </DialogFooter>

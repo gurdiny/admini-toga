@@ -10,7 +10,7 @@ import { DEV_USERS } from "@/lib/dev/dev-login-shortcuts";
 export function DevToolbar({ user }: { user: CurrentUser }) {
   if (!isDevelopment()) return null;
   return (
-    <div className="bg-card/95 fixed right-3 bottom-20 z-50 md:bottom-3 flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs shadow-sm backdrop-blur">
+    <div className="bg-card/95 fixed right-3 bottom-3 z-50 hidden md:flex flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs shadow-sm backdrop-blur">
       <span className="text-muted-foreground">Dev:</span>
       {DEV_USERS.map((devUser) =>
         devUser.email === user.email ? (
@@ -19,6 +19,26 @@ export function DevToolbar({ user }: { user: CurrentUser }) {
           </span>
         ) : (
           // Recarga completa (no <Link>) para que toda la página use la nueva sesión.
+          <a key={devUser.email} href={devLoginUrl("/", devUser.email)} className="underline">
+            {devUser.label}
+          </a>
+        ),
+      )}
+    </div>
+  );
+}
+
+/** Versión para el menú del celular. */
+export function DevUserSwitch({ email }: { email: string }) {
+  return (
+    <div className="flex items-center justify-center gap-3 rounded-xl border border-dashed p-3 text-sm">
+      <span className="text-muted-foreground">Dev · entrar como:</span>
+      {DEV_USERS.map((devUser) =>
+        devUser.email === email ? (
+          <span key={devUser.email} className="text-toga-green-strong font-bold">
+            {devUser.label}
+          </span>
+        ) : (
           <a key={devUser.email} href={devLoginUrl("/", devUser.email)} className="underline">
             {devUser.label}
           </a>

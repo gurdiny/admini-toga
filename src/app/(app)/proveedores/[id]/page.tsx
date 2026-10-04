@@ -111,7 +111,7 @@ export default async function SupplierPage({ params }: PageProps<"/proveedores/[
       </section>
 
       {/* ─── Saldo ──────────────────────────────────────────────────────── */}
-      <section className="bg-card mb-6 rounded-xl border p-4" aria-labelledby="saldo">
+      <section className="bg-card shadow-toga mb-6 rounded-2xl p-5" aria-labelledby="saldo">
         <p id="saldo" className="text-muted-foreground text-sm">
           Le debes hoy
         </p>
@@ -134,7 +134,7 @@ export default async function SupplierPage({ params }: PageProps<"/proveedores/[
               const progress = Math.min(100, (Number(debt.paid) / Number(debt.amount)) * 100);
               const overdue = debt.dueDate !== null && debt.dueDate < today;
               return (
-                <li key={debt.id} className="bg-card space-y-3 rounded-xl border p-4">
+                <li key={debt.id} className="bg-card shadow-toga space-y-3 rounded-2xl p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 space-y-0.5">
                       <p className="text-muted-foreground text-xs">
@@ -201,7 +201,7 @@ export default async function SupplierPage({ params }: PageProps<"/proveedores/[
             description="Registra un adeudo cuando te entregue algo a crédito, o un pago de contado."
           />
         ) : (
-          <ol className="bg-card divide-y overflow-hidden rounded-xl border">
+          <ol className="bg-card shadow-toga divide-y overflow-hidden rounded-2xl">
             {[...statement].reverse().map((entry) => {
               const isDebt = entry.type === "DEBT";
               const code = formatCode(isDebt ? "debt" : "payment", entry.code);

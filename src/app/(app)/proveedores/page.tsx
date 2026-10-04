@@ -36,17 +36,19 @@ export default async function SuppliersPage({ searchParams }: PageProps<"/provee
 
       <form className="mb-4 flex gap-2" role="search">
         <div className="relative flex-1">
-          <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" aria-hidden />
+          <Search className="text-muted-foreground absolute top-1/2 left-4 size-4 -translate-y-1/2" aria-hidden />
           <Input
             name="q"
             defaultValue={search}
             placeholder="Nombre, contacto, teléfono o PROV-0001"
             aria-label="Buscar proveedor"
-            className="h-11 pl-9"
+            type="search"
+            enterKeyHint="search"
+            className="bg-card h-12 rounded-full pl-10"
           />
         </div>
         {showInactive && <input type="hidden" name="inactivos" value="1" />}
-        <Button type="submit" variant="outline" className="h-11">
+        <Button type="submit" variant="outline" className="hidden h-12 sm:inline-flex">
           Buscar
         </Button>
       </form>
@@ -70,7 +72,7 @@ export default async function SuppliersPage({ searchParams }: PageProps<"/provee
           action={!search && <NewSupplierButton categories={options.supplierCategories} />}
         />
       ) : (
-        <ul className="bg-card divide-y overflow-hidden rounded-xl border">
+        <ul className="bg-card shadow-toga divide-y overflow-hidden rounded-2xl">
           {suppliers.map((s) => (
             <li key={s.id}>
               <Link href={`/proveedores/${s.id}`} className="hover:bg-muted/60 flex min-h-16 items-center gap-3 px-4 py-3">

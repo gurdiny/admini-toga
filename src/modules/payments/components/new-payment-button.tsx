@@ -6,13 +6,21 @@ import type { PaymentMethod } from "@/generated/prisma/browser";
 import type { CaptureOptions } from "../queries";
 import { PaymentFormDialog } from "./payment-form-dialog";
 
-export function NewPaymentButton({ options, defaultMethod }: { options: CaptureOptions; defaultMethod: PaymentMethod }) {
+export function NewPaymentButton({
+  options,
+  defaultMethod,
+  className,
+}: {
+  options: CaptureOptions;
+  defaultMethod: PaymentMethod;
+  className?: string;
+}) {
   return (
     <PaymentFormDialog
       options={options}
       defaultMethod={defaultMethod}
       trigger={
-        <Button className="h-11 md:h-9">
+        <Button variant="brand" className={className}>
           <Plus aria-hidden />
           Registrar pago
         </Button>

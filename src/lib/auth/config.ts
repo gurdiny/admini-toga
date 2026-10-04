@@ -6,11 +6,20 @@ import { nextCookies } from "better-auth/next-js";
 import { db } from "@/lib/db";
 
 const DAY = 60 * 60 * 24;
+const LAN_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/;
 
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL,
   secret: process.env.BETTER_AUTH_SECRET,
   database: prismaAdapter(db, { provider: "postgresql" }),
+
+  // Solo desarrollo: acepta el login desde el celular en la red local
+  // (http://192.168.x.x:3000). En producción solo vale BETTER_AUTH_URL.
+  trustedOrigins: async (request) => {
+    if (process.env.NODE_ENV !== "development" || !request) return [];
+    const origin = request.headers.get("origin");
+    return origin && LAN_ORIGIN.test(origin) ? [origin] : [];
+  },
 
   emailAndPassword: {
     enabled: true,

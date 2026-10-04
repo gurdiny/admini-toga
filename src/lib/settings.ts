@@ -14,7 +14,7 @@ export type AppSettings = {
 const DEFAULTS: AppSettings = {
   businessName: "TOGA Plata .925",
   defaultCurrency: "MXN",
-  defaultPaymentMethod: "TRANSFERENCIA",
+  defaultPaymentMethod: "EFECTIVO",
   overdueLookbackDays: 30,
 };
 

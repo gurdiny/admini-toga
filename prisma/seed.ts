@@ -59,16 +59,17 @@ async function main() {
   const staff = await upsertUser("mostrador@joyeria.local", "Mostrador", "STAFF");
 
   // ─── Categorías ────────────────────────────────────────────────────────
-  // De pago: en qué se gastó. De proveedor: qué tipo de proveedor es.
+  // TOGA solo vende plata .925. De pago: qué se compró o qué trabajo se pagó.
+  // De proveedor: si entrega piezas terminadas o hace mano de obra.
   const paymentCategories = [
-    ["Oro", "#ca8a04"],
-    ["Plata", "#94a3b8"],
-    ["Piedras y gemas", "#7c3aed"],
-    ["Fundición", "#ea580c"],
-    ["Engaste", "#0891b2"],
-    ["Grabado y acabados", "#16a34a"],
-    ["Empaque y estuches", "#db2777"],
-    ["Herramientas e insumos", "#525252"],
+    ["Anillos", "#c23d73"],
+    ["Aretes", "#d67da1"],
+    ["Pulseras", "#6671ba"],
+    ["Cadenas", "#6a5acd"],
+    ["Collares", "#4f6b24"],
+    ["Dijes", "#90ac53"],
+    ["Mano de obra", "#aa3a3e"],
+    ["Otros", "#737373"],
   ] as const;
   const payCat: Record<string, string> = {};
   for (const [i, [name, color]] of paymentCategories.entries()) {
@@ -76,10 +77,8 @@ async function main() {
   }
 
   const supplierCategories = [
-    ["Metales", "#ca8a04"],
-    ["Taller externo", "#0891b2"],
-    ["Gemas", "#7c3aed"],
-    ["Insumos", "#525252"],
+    ["Joyería", "#c23d73"],
+    ["Mano de obra", "#aa3a3e"],
   ] as const;
   const supCat: Record<string, string> = {};
   for (const [i, [name, color]] of supplierCategories.entries()) {
@@ -89,11 +88,11 @@ async function main() {
   // ─── Proveedores ───────────────────────────────────────────────────────
   // Contacto variado a propósito: hay proveedores sin teléfono ni WhatsApp.
   const suppliers = [
-    ["Metales Finos del Centro", "Metales", "Don Ernesto", "55 1234 5678", true],
-    ["Fundición Hernández", "Taller externo", "Sr. Hernández", "55 2345 6789", false],
-    ["Gemas y Brillantes Polanco", "Gemas", null, "55 3456 7890", true],
-    ["Taller de Engaste Ruiz", "Taller externo", "Lupita Ruiz", null, false],
-    ["Estuches y Empaques MX", "Insumos", null, null, false],
+    ["Platería Taxco Hernández", "Joyería", "Don Ernesto", "55 1234 5678", true],
+    ["Cadenas y Eslabones del Centro", "Joyería", "Sra. Marisol", "55 2345 6789", false],
+    ["Aretes y Dijes Guadalajara", "Joyería", null, "33 3456 7890", true],
+    ["Taller de Engaste Ruiz", "Mano de obra", "Lupita Ruiz", null, false],
+    ["Soldadura y Pulido Méndez", "Mano de obra", null, null, false],
   ] as const;
   const sup: Record<string, string> = {};
   for (const [name, category, contactName, phone, hasWhatsApp] of suppliers) {
@@ -114,7 +113,7 @@ async function main() {
   const settings: Record<string, Prisma.InputJsonValue> = {
     businessName: "TOGA Plata .925",
     defaultCurrency: "MXN",
-    defaultPaymentMethod: "TRANSFERENCIA",
+    defaultPaymentMethod: "EFECTIVO", // casi todos los pagos son en efectivo
     overdueLookbackDays: 30,
     modules: { payments: true, reminders: true },
   };
@@ -143,10 +142,10 @@ async function main() {
   }
 
   const reminders = [
-    { clientId: cli[0], targetDate: mxDay(1), targetTime: "11:00", note: "Anillo de compromiso oro 14k, talla 6. Engaste de diamante 0.5 ct.", priority: "ALTA" },
+    { clientId: cli[0], targetDate: mxDay(1), targetTime: "11:00", note: "Anillo de compromiso plata .925, talla 6, con circonia.", priority: "ALTA" },
     { clientId: cli[1], targetDate: mxDay(1), targetTime: null, note: "Cadena de plata .925 con dije grabado: iniciales C.M.", priority: "NORMAL" },
     { clientId: cli[2], targetDate: mxDay(0), targetTime: "17:30", note: "Ajuste de talla de argolla, de 7 a 6.5.", priority: "NORMAL" },
-    { clientId: cli[3], targetDate: mxDay(-2), targetTime: null, note: "Reparación de broche en pulsera de oro.", priority: "ALTA" },
+    { clientId: cli[3], targetDate: mxDay(-2), targetTime: null, note: "Reparación de broche en pulsera de plata.", priority: "ALTA" },
     { clientId: cli[0], targetDate: mxDay(-5), targetTime: null, note: "Limpieza y pulido de aretes.", priority: "NORMAL", done: true },
   ] as const;
   const orders: string[] = [];
@@ -164,10 +163,10 @@ async function main() {
   // Adeudos: saldo inicial de un proveedor que ya se debía al empezar a usar
   // el sistema, un crédito ya liquidado seguido de uno nuevo, y uno a medias.
   const debts = [
-    { key: "metales-inicial", day: -40, supplier: "Metales Finos del Centro", kind: "OPENING_BALANCE", category: "Oro", description: "Saldo pendiente al dar de alta al proveedor", amount: "50000.00", ref: null, due: null },
-    { key: "gemas-diamante", day: -10, supplier: "Gemas y Brillantes Polanco", kind: "CREDIT", category: "Piedras y gemas", description: "Diamante 0.5 ct VS1 y lote de 10 zafiros 3 mm", amount: "25000.00", ref: "NR-2231", due: 20 },
-    { key: "fundicion-argollas", day: -6, supplier: "Fundición Hernández", kind: "CREDIT", category: "Fundición", description: "Fundición de 3 argollas", amount: "950.00", ref: null, due: null },
-    { key: "fundicion-lote", day: -2, supplier: "Fundición Hernández", kind: "CREDIT", category: "Fundición", description: "Fundición de lote de dijes", amount: "3000.00", ref: "F-118", due: 15 },
+    { key: "taxco-inicial", day: -40, supplier: "Platería Taxco Hernández", kind: "OPENING_BALANCE", category: "Anillos", description: "Saldo pendiente al dar de alta al proveedor", amount: "50000.00", ref: null, due: null },
+    { key: "cadenas-lote", day: -10, supplier: "Cadenas y Eslabones del Centro", kind: "CREDIT", category: "Cadenas", description: "Lote de 40 cadenas de plata .925", amount: "25000.00", ref: "NR-2231", due: 20 },
+    { key: "aretes-argollas", day: -6, supplier: "Aretes y Dijes Guadalajara", kind: "CREDIT", category: "Aretes", description: "12 pares de argollas de plata", amount: "950.00", ref: null, due: null },
+    { key: "aretes-dijes", day: -2, supplier: "Aretes y Dijes Guadalajara", kind: "CREDIT", category: "Dijes", description: "Lote de 30 dijes de plata", amount: "3000.00", ref: "F-118", due: 15 },
   ] as const;
   const debt: Record<string, string> = {};
   for (const d of debts) {
@@ -187,18 +186,18 @@ async function main() {
     debt[d.key] = created.id;
   }
 
-  // debt: null = pago de contado.
+  // debt: null = pago de contado. Casi todo en efectivo, como en el negocio.
   const payments = [
-    { day: -35, supplier: "Metales Finos del Centro", category: "Oro", concept: "Abono a saldo inicial", amount: "21400.00", method: "TRANSFERENCIA", debt: "metales-inicial", order: null },
-    { day: -1, supplier: "Metales Finos del Centro", category: "Plata", concept: "Abono a saldo inicial", amount: "1450.50", method: "TRANSFERENCIA", debt: "metales-inicial", order: 1 },
-    { day: 0, supplier: "Metales Finos del Centro", category: "Oro", concept: "Abono: 10 g oro 14k para anillo", amount: "12850.00", method: "TRANSFERENCIA", debt: "metales-inicial", order: 0 },
-    { day: -4, supplier: "Gemas y Brillantes Polanco", category: "Piedras y gemas", concept: "Anticipo diamante", amount: "18500.00", method: "TRANSFERENCIA", debt: "gemas-diamante", order: 0 },
-    { day: -3, supplier: "Fundición Hernández", category: "Fundición", concept: "Liquidación fundición de argollas", amount: "950.00", method: "EFECTIVO", debt: "fundicion-argollas", order: null },
-    { day: 0, supplier: "Taller de Engaste Ruiz", category: "Engaste", concept: "Engaste de diamante 0.5 ct", amount: "1800.00", method: "EFECTIVO", debt: null, order: 0 },
-    { day: -1, supplier: "Estuches y Empaques MX", category: "Empaque y estuches", concept: "Caja de 50 estuches de terciopelo", amount: "2300.00", method: "TARJETA", debt: null, order: null },
-    { day: -12, supplier: "Fundición Hernández", category: "Grabado y acabados", concept: "Grabado láser de 5 piezas", amount: "750.00", method: "EFECTIVO", debt: null, order: 1 },
-    { day: -20, supplier: "Estuches y Empaques MX", category: "Herramientas e insumos", concept: "Pulidor y paños de microfibra", amount: "640.00", method: "TARJETA", debt: null, order: null },
-    { day: -8, supplier: "Gemas y Brillantes Polanco", category: "Piedras y gemas", concept: "Abono zafiros", amount: "3000.00", method: "CHEQUE", debt: "gemas-diamante", order: null },
+    { day: -35, supplier: "Platería Taxco Hernández", category: "Anillos", concept: "Abono a saldo inicial", amount: "21400.00", method: "EFECTIVO", debt: "taxco-inicial", order: null },
+    { day: -1, supplier: "Platería Taxco Hernández", category: "Pulseras", concept: "Abono a saldo inicial", amount: "1450.50", method: "EFECTIVO", debt: "taxco-inicial", order: 1 },
+    { day: 0, supplier: "Platería Taxco Hernández", category: "Anillos", concept: "Abono: anillo de compromiso", amount: "12850.00", method: "TRANSFERENCIA", debt: "taxco-inicial", order: 0 },
+    { day: -4, supplier: "Cadenas y Eslabones del Centro", category: "Cadenas", concept: "Anticipo lote de cadenas", amount: "18500.00", method: "EFECTIVO", debt: "cadenas-lote", order: null },
+    { day: -3, supplier: "Aretes y Dijes Guadalajara", category: "Aretes", concept: "Liquidación argollas", amount: "950.00", method: "EFECTIVO", debt: "aretes-argollas", order: null },
+    { day: 0, supplier: "Taller de Engaste Ruiz", category: "Mano de obra", concept: "Engaste de circonias en anillo", amount: "1800.00", method: "EFECTIVO", debt: null, order: 0 },
+    { day: -1, supplier: "Soldadura y Pulido Méndez", category: "Mano de obra", concept: "Soldadura de 8 cadenas", amount: "640.00", method: "EFECTIVO", debt: null, order: null },
+    { day: -12, supplier: "Taller de Engaste Ruiz", category: "Mano de obra", concept: "Grabado de 5 placas", amount: "750.00", method: "EFECTIVO", debt: null, order: 1 },
+    { day: -20, supplier: "Soldadura y Pulido Méndez", category: "Mano de obra", concept: "Pulido de 30 piezas", amount: "900.00", method: "EFECTIVO", debt: null, order: null },
+    { day: -8, supplier: "Cadenas y Eslabones del Centro", category: "Cadenas", concept: "Abono lote de cadenas", amount: "3000.00", method: "EFECTIVO", debt: "cadenas-lote", order: null },
   ] as const;
   for (const p of payments) {
     await db.supplierPayment.create({

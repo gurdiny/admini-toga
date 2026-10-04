@@ -11,7 +11,7 @@ const balance = async (page) => (await page.locator("#saldo + span").innerText()
     await page.goto(`${B}/api/dev/login?as=mostrador@joyeria.local&next=/proveedores`);
     log((await page.getByText("Mostrador", { exact: true }).count()) > 0, "Entra como Mostrador");
     await page.getByRole("button", { name: "Nuevo proveedor" }).first().click();
-    await page.getByLabel("Nombre").fill("Platería Taxco E2E");
+    await page.getByLabel("Nombre").fill("Joyería Prueba E2E");
     await page.getByLabel("Teléfono").fill("(55) 9876-5432");
     await page.getByText("Tiene WhatsApp").click();
     await page.getByText("Ya le debo").click();
@@ -29,7 +29,7 @@ const balance = async (page) => (await page.locator("#saldo + span").innerText()
       if (liquidar) await dialog.getByRole("button", { name: /Liquidar/ }).click();
       else await dialog.getByLabel("Monto").fill(amount);
       await dialog.getByRole("combobox", { name: "Categoría" }).click();
-      await page.getByRole("option", { name: "Plata" }).click();
+      await page.getByRole("option", { name: "Pulseras" }).click();
       return dialog;
     };
     let dialog = await abonar("20000");
@@ -79,15 +79,15 @@ const balance = async (page) => (await page.locator("#saldo + span").innerText()
 
     // ── Permisos sobre registros de otros / de días anteriores ──
     await page.goto(`${B}/proveedores`);
-    await page.getByRole("link", { name: /Metales Finos/ }).click();
-    await page.getByRole("heading", { name: "Metales Finos del Centro" }).waitFor();
+    await page.getByRole("link", { name: /Platería Taxco Hernández/ }).click();
+    await page.getByRole("heading", { name: "Platería Taxco Hernández" }).waitFor();
     const menus = await page.getByRole("button", { name: /Opciones de PAG-/ }).count();
-    log(menus === 2, `Metales: el Mostrador solo puede tocar sus 2 pagos de hoy (de 3) → ${menus} menús`);
+    log(menus === 2, `Taxco: el Mostrador solo puede tocar sus 2 pagos de hoy (de 3) → ${menus} menús`);
 
     // ── Dueño ──
     await page.goto(`${B}/api/dev/login?as=dueno@joyeria.local&next=/proveedores`);
-    await page.getByRole("link", { name: /Metales Finos/ }).click();
-    await page.getByRole("heading", { name: "Metales Finos del Centro" }).waitFor();
+    await page.getByRole("link", { name: /Platería Taxco Hernández/ }).click();
+    await page.getByRole("heading", { name: "Platería Taxco Hernández" }).waitFor();
     log((await page.getByRole("button", { name: /Opciones de PAG-/ }).count()) === 3, "Dueño puede tocar los 3 pagos");
     log((await page.getByRole("button", { name: "Desactivar" }).count()) === 1, "Dueño ve «Desactivar»");
   } catch (error) {

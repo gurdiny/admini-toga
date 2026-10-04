@@ -12,7 +12,7 @@ El plan completo por fases está en [docs/PLAN.md](docs/PLAN.md). **Trabaja una 
 - [x] Fase 1 — Modelo de datos (Prisma)
 - [x] Fase 2 — Autenticación y roles
 - [x] Fase 3 — Capa de datos, validación y zona horaria
-- [x] Fase 4 — Módulo de pagos
+- [x] Fase 4 — Módulo de pagos (rediseño mobile first incluido)
 - [ ] Fase 5 — Recordatorios / checklist
 - [ ] Fase 6 — Panel de administración
 - [ ] Fase 7 — Reportes, exportación y búsqueda
@@ -49,16 +49,23 @@ Al cerrar una fase: marcarla aquí, hacer commit (`feat(fase-N): ...`) y entrega
    - Ocultar en la UI no basta: cada Server Action valida con `requireRole` y, al borrar, con `canDelete`.
 9. **Seguridad de rutas**: `proxy.ts` solo redirige a `/login`; nunca es la barrera de seguridad (CVE-2025-29927). La sesión y el rol se verifican en cada layout de servidor y al inicio de cada Server Action.
 
-## Marca TOGA
+## Marca TOGA y diseño
 
-Tokens en `src/app/globals.css` (tomados de toga.mx), mapeados al tema de shadcn. Reglas:
+**Mobile first de verdad**: el mostrador y el taller usan la app solo en el celular. Se diseña primero a 390 px y la tabla de escritorio es un extra (`xl:`).
 
-- **Botón principal en negro** (`primary` = `#1a1a1a`), como el logo. Nunca texto blanco sobre el verde `#90ac53` (contraste 2.6:1, ilegible).
-- **Verde** (`toga-green`) para foco, estados positivos y "liquidado"; como texto usar `text-toga-green-strong` (`#4f6b24`). Fondo suave: `bg-toga-green-soft`.
-- **Rojo** `#aa3a3e` = `destructive` (borrar, atrasados). Rosa, azul y violeta para gráficas (`chart-1..5`) y chips de categoría.
-- Fondo de página `#f5f5f5`, tarjetas blancas, radio 12px.
-- Tipografía: Neulis Neue (texto, 400/700) y Neulis Sans Bold (h1–h3), auto-hospedadas en `src/app/fonts/`. Neulis Sans no tiene peso regular publicado, por eso no se usa para texto corrido.
-- Logo: `TogaLogo` (con PLATA.925) y `TogaWordmark` (solo TOGA) en `src/components/brand/`. Favicon en `src/app/icon.png`.
+Tokens en `src/app/globals.css` (tomados de toga.mx, tema WordPress + WooCommerce), mapeados al tema de shadcn. No se importa el CSS de WordPress: se replican sus tokens y patrones.
+
+- **Acción principal**: `<Button variant="brand">` = rosa TOGA en píldora (`#c23d73`, texto blanco 5:1). El rosa original `#d67da1` solo para íconos/acentos (2.9:1, no lleva texto). Botones secundarios negros/outline. Todos los botones son píldora (`rounded-full`) y de al menos 40 px de alto.
+- **Verde** (`toga-green`) para estados positivos y "Al corriente"; como texto `text-toga-green-strong`. **Rojo** `#aa3a3e` = `destructive`.
+- Tarjetas: `bg-card shadow-toga rounded-2xl` (sombra suave de toga.mx), sin bordes duros. Fondo `#f5f5f5`.
+- **Navegación celular**: barra inferior como la de toga.mx (Inicio · Pagos · ➕ · Proveedores · Menú). El ➕ rosa registra un pago desde cualquier pantalla (dentro de `/proveedores/[id]` ya trae el proveedor). Admin, cerrar sesión y el cambio de usuario de desarrollo están en «Menú».
+- **Diálogos**: en celular son paneles que suben desde abajo con el botón de guardar pegado abajo; desde `sm` son ventanas centradas.
+- Tipografía: Neulis Neue (texto, 400/700) y Neulis Sans Bold (h1–h3), auto-hospedadas en `src/app/fonts/`.
+- Logo: `TogaLogo` y `TogaWordmark` en `src/components/brand/`. Favicon en `src/app/icon.png`.
+
+## Negocio
+
+TOGA vende **solo plata .925**. Sus proveedores son de **joyería** (piezas terminadas) o **mano de obra** (engaste, soldadura, pulido, grabado). Categorías de pago: Anillos, Aretes, Pulseras, Cadenas, Collares, Dijes, Mano de obra, Otros. **Casi todo se paga en efectivo** (método por defecto). Nada de oro ni piedras preciosas en ejemplos.
 
 ## Estructura
 
@@ -129,6 +136,8 @@ Variables: [.env.example](.env.example) documenta todas. Se usa el puerto 5433 p
 - **Login automático en desarrollo**: con `DEV_AUTO_LOGIN="correo"` en `.env`, `npm run dev` entra solo con ese usuario del seed (pasa por el login real de Better Auth vía `/api/dev/login`). La barra "Dev:" abajo a la derecha cambia de usuario en un clic; `/login?salir=1` muestra el formulario real. Todo está en `src/lib/dev/` y se apaga solo en producción (`NODE_ENV !== "development"`: la ruta da 404 y el proxy manda a `/login`).
 - **Patrón de pantallas** (ver `src/modules/payments/`): `queries.ts` (server-only, devuelve datos serializables: montos string, días `DayKey`), `actions/*.ts` (`defineAction`), `components/` (client). Los diálogos de formulario separan el `Dialog` del `Form` interno: el formulario se monta al abrir y siempre arranca limpio. En formularios `useAction(..., { errorToast: false })` (el error ya se ve dentro). Listados: tarjetas en celular (`md:hidden`) y tabla en escritorio (`hidden md:block`). Filtros en la URL (`filters.ts`). Permisos por fila se calculan en el servidor y se pasan como booleanos.
 - **Pruebas E2E** en `e2e/` con playwright-core y el Chrome de Windows (Chromium no corre en este WSL sin `sudo`). Crean datos con «E2E»; limpiar con `npm run e2e:clean`.
+- **Probar en el celular** (desarrollo): `allowedDevOrigins` en `next.config.ts` y `trustedOrigins` de Better Auth aceptan IPs de red local solo en desarrollo. WSL en modo NAT no es alcanzable desde el teléfono: hace falta `networkingMode=mirrored` en `%UserProfile%\.wslconfig` y abrir el puerto 3000 en el firewall de Windows.
+- Avisos de hidratación con `caret-color` vienen de Playwright (capturas) y con `bis_*`/`cz-shortcut-listen` de extensiones del navegador: no son errores de la app.
 - Scripts sueltos que importan módulos con `server-only`: `npx tsx --conditions=react-server archivo.ts`.
 - shadcn/ui: estilo `radix-nova`, componentes con `npx shadcn@latest add <componente>`.
 - Para exportar a Excel usar `exceljs`: el paquete `xlsx` publicado en npm está desactualizado y con vulnerabilidades conocidas.

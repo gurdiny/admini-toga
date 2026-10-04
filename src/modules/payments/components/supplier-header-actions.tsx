@@ -23,21 +23,26 @@ export function SupplierHeaderActions({ supplier, options, defaultMethod, canTog
   });
 
   return (
-    <div className="flex flex-wrap gap-2">
+    // Celular: cuadrícula de 2 con la acción principal a todo lo ancho.
+    <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
       {supplier.isActive && (
         <>
           <PaymentFormDialog
             options={options}
             defaultMethod={defaultMethod}
             preset={{ supplierId: supplier.id }}
-            trigger={<Button className="h-11 md:h-9">Registrar pago</Button>}
+            trigger={
+              <Button variant="brand" className="col-span-2">
+                Registrar pago
+              </Button>
+            }
           />
           <DebtFormDialog
             supplierId={supplier.id}
             supplierName={supplier.name}
             categories={options.paymentCategories}
             trigger={
-              <Button variant="outline" className="h-11 md:h-9">
+              <Button variant="outline">
                 <Plus aria-hidden />
                 Nuevo adeudo
               </Button>
@@ -49,7 +54,7 @@ export function SupplierHeaderActions({ supplier, options, defaultMethod, canTog
         categories={options.supplierCategories}
         supplier={supplier}
         trigger={
-          <Button variant="outline" className="h-11 md:h-9">
+          <Button variant="outline">
             <Pencil aria-hidden />
             Editar
           </Button>
@@ -58,7 +63,7 @@ export function SupplierHeaderActions({ supplier, options, defaultMethod, canTog
       {canToggleActive && (
         <Button
           variant="ghost"
-          className="h-11 md:h-9"
+          className="text-muted-foreground col-span-2"
           disabled={toggle.pending}
           onClick={() => toggle.run({ id: supplier.id, isActive: !supplier.isActive })}
         >

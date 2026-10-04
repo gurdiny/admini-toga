@@ -82,6 +82,7 @@ function DebtForm({
     notes: debt?.notes ?? "",
   });
   const [values, setValues] = useState(initial);
+  const [showCurrency, setShowCurrency] = useState(() => (debt?.currency ?? "MXN") !== "MXN");
   const set = <K extends keyof typeof values>(key: K, value: (typeof values)[K]) =>
     setValues((current) => ({ ...current, [key]: value }));
 
@@ -126,24 +127,30 @@ function DebtForm({
             <Input id="d-desc" value={values.description} onChange={(e) => set("description", e.target.value)} className="h-11" autoFocus aria-invalid={!!errors.description} />
           </Field>
 
-          <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
+          <div className="space-y-2">
             <Field label="Monto total" htmlFor="d-amount" required error={errors.amount}>
               <MoneyInput id="d-amount" value={values.amount} currency={values.currency} onValueChange={(v) => set("amount", v)} aria-invalid={!!errors.amount} />
             </Field>
-            <Field label="Moneda" htmlFor="d-currency" error={errors.currency}>
-              <Select value={values.currency} onValueChange={(v) => set("currency", v)}>
-                <SelectTrigger id="d-currency" className="h-11 w-full sm:w-28">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CURRENCIES.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
+            {showCurrency || values.currency !== "MXN" ? (
+              <Field label="Moneda" htmlFor="d-currency" error={errors.currency}>
+                <Select value={values.currency} onValueChange={(v) => set("currency", v)}>
+                  <SelectTrigger id="d-currency" className="h-11 w-full sm:w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CURRENCIES.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            ) : (
+              <button type="button" className="text-muted-foreground text-sm underline underline-offset-4" onClick={() => setShowCurrency(true)}>
+                ¿En dólares?
+              </button>
+            )}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -182,10 +189,10 @@ function DebtForm({
         </form>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onDone} disabled={action.pending}>
+          <Button type="button" variant="ghost" size="lg" onClick={onDone} disabled={action.pending} className="sm:h-10 sm:text-sm">
             Cancelar
           </Button>
-          <Button type="submit" form="debt-form" disabled={action.pending} className="h-11 sm:h-9">
+          <Button type="submit" variant="brand" size="lg" form="debt-form" disabled={action.pending} className="sm:h-10 sm:text-sm">
             {action.pending ? "Guardando…" : isEdit ? "Guardar cambios" : "Registrar adeudo"}
           </Button>
         </DialogFooter>

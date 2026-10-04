@@ -23,11 +23,17 @@ export function RangePicker({ filters }: { filters: PaymentPageFilters }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Periodo">
+      <div className="bg-muted grid grid-cols-4 gap-1 rounded-full p-1" role="group" aria-label="Periodo">
         {PRESETS.map((preset) => {
           const active = filters.rango === preset.value && !custom;
           return (
-            <Button key={preset.value} asChild variant={active ? "default" : "outline"} size="sm" className="h-10">
+            <Button
+              key={preset.value}
+              asChild
+              variant="ghost"
+              size="sm"
+              className={cn("h-10 px-1 text-[13px]", active && "bg-card shadow-toga-sm hover:bg-card font-bold")}
+            >
               <Link
                 href={paymentsHref(filters, { rango: preset.value, desde: null, hasta: null, pagina: null })}
                 aria-current={active ? "true" : undefined}
@@ -41,18 +47,18 @@ export function RangePicker({ filters }: { filters: PaymentPageFilters }) {
         <Button
           type="button"
           size="sm"
-          variant={custom ? "default" : "outline"}
-          className="h-10"
+          variant="ghost"
+          className={cn("h-10 px-1 text-[13px]", custom && "bg-card shadow-toga-sm hover:bg-card font-bold")}
           aria-expanded={custom}
           onClick={() => setCustom((c) => !c)}
         >
-          Personalizado
+          Otro
         </Button>
       </div>
 
       {custom && (
         <form
-          className={cn("bg-card flex flex-wrap items-end gap-3 rounded-lg border p-3")}
+          className="bg-card shadow-toga grid grid-cols-2 items-end gap-3 rounded-2xl p-3 sm:flex"
           onSubmit={(event) => {
             event.preventDefault();
             router.push(paymentsHref(filters, { rango: "personalizado", desde: from, hasta: to, pagina: null }));
@@ -66,8 +72,8 @@ export function RangePicker({ filters }: { filters: PaymentPageFilters }) {
             <span>Hasta</span>
             <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-10" required />
           </label>
-          <Button type="submit" className="h-10">
-            Aplicar
+          <Button type="submit" className="col-span-2 h-10">
+            Ver periodo
           </Button>
         </form>
       )}

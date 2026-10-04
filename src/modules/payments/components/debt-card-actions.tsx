@@ -38,7 +38,7 @@ export function DebtCardActions({ debt, supplierId, supplierName, options, defau
           preset={{ supplierId, debtId: debt.id }}
           title={`Abonar a ${code}`}
           trigger={
-            <Button size="sm" className="h-10">
+            <Button variant="brand">
               <HandCoins aria-hidden />
               Abonar
             </Button>

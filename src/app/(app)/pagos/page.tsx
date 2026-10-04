@@ -55,7 +55,8 @@ export default async function PaymentsPage({ searchParams }: PageProps<"/pagos">
       <PageHeader
         title="Pagos a proveedores"
         description={<span className="first-letter:uppercase">{rangeText}</span>}
-        actions={<NewPaymentButton options={options} defaultMethod={settings.defaultPaymentMethod} />}
+        // En celular se registra con el botón «+» de la barra inferior.
+        actions={<NewPaymentButton options={options} defaultMethod={settings.defaultPaymentMethod} className="hidden md:inline-flex" />}
       />
 
       <div className="mb-6 space-y-3">
@@ -69,10 +70,18 @@ export default async function PaymentsPage({ searchParams }: PageProps<"/pagos">
             </>
           )}
           <div className="relative flex-1">
-            <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" aria-hidden />
-            <Input name="q" defaultValue={filters.q} placeholder="Concepto, proveedor o PAG-0001" aria-label="Buscar pago" className="h-11 pl-9" />
+            <Search className="text-muted-foreground absolute top-1/2 left-4 size-4 -translate-y-1/2" aria-hidden />
+            <Input
+              name="q"
+              type="search"
+              enterKeyHint="search"
+              defaultValue={filters.q}
+              placeholder="Buscar concepto, proveedor o PAG-0001"
+              aria-label="Buscar pago"
+              className="bg-card h-12 rounded-full pl-10"
+            />
           </div>
-          <Button type="submit" variant="outline" className="h-11">
+          <Button type="submit" variant="outline" className="hidden h-12 sm:inline-flex">
             Buscar
           </Button>
         </form>
@@ -125,35 +134,36 @@ export default async function PaymentsPage({ searchParams }: PageProps<"/pagos">
             </p>
 
             {/* Celular: tarjetas */}
-            <ul className="bg-card divide-y overflow-hidden rounded-xl border md:hidden">
+            <ul className="bg-card shadow-toga divide-y overflow-hidden rounded-2xl xl:hidden">
               {items.map((p) => (
-                <li key={p.id} className="flex items-start gap-3 px-4 py-3">
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <p className="text-muted-foreground text-xs">
-                      {formatDay(p.date)} · {formatCode("payment", p.code)} · {PAYMENT_METHOD_LABELS[p.paymentMethod]}
-                    </p>
-                    <p className="truncate font-bold">
-                      <Link href={`/proveedores/${p.supplierId}`}>{p.supplierName}</Link>
-                    </p>
+                <li key={p.id} className="flex items-start gap-2 py-3 pr-1 pl-4">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <Link href={`/proveedores/${p.supplierId}`} className="truncate font-bold">
+                        {p.supplierName}
+                      </Link>
+                      <span className="text-base font-bold whitespace-nowrap tabular-nums">{formatMoney(p.amount, p.currency)}</span>
+                    </div>
                     <p className="truncate text-sm">{p.concept}</p>
-                    <div className="flex flex-wrap gap-1.5 pt-1">
+                    <p className="text-muted-foreground text-xs">
+                      {formatDay(p.date, "EEE d MMM")} · {PAYMENT_METHOD_LABELS[p.paymentMethod]} · {formatCode("payment", p.code)}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 pt-0.5">
                       <CategoryChip name={p.categoryName} color={p.categoryColor} />
                       <DebtBadge payment={p} />
                     </div>
                   </div>
-                  <p className="font-bold tabular-nums">{formatMoney(p.amount, p.currency)}</p>
                   <Actions payment={p} user={user} options={options} defaultMethod={settings.defaultPaymentMethod} />
                 </li>
               ))}
             </ul>
 
             {/* Escritorio: tabla */}
-            <div className="bg-card hidden overflow-hidden rounded-xl border md:block">
+            <div className="bg-card shadow-toga hidden overflow-hidden rounded-2xl xl:block">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <SortHead filters={filters} sort="date" label="Fecha" />
-                    <TableHead>Código</TableHead>
                     <SortHead filters={filters} sort="supplier" label="Proveedor" />
                     <TableHead>Concepto</TableHead>
                     <TableHead>Categoría</TableHead>
@@ -167,8 +177,10 @@ export default async function PaymentsPage({ searchParams }: PageProps<"/pagos">
                 <TableBody>
                   {items.map((p) => (
                     <TableRow key={p.id}>
-                      <TableCell className="whitespace-nowrap">{formatDay(p.date, "EEE d MMM")}</TableCell>
-                      <TableCell className="text-muted-foreground whitespace-nowrap">{formatCode("payment", p.code)}</TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {formatDay(p.date, "EEE d MMM")}
+                        <span className="text-muted-foreground block text-xs">{formatCode("payment", p.code)}</span>
+                      </TableCell>
                       <TableCell className="max-w-48 truncate font-bold">
                         <Link href={`/proveedores/${p.supplierId}`} className="hover:underline">
                           {p.supplierName}
@@ -225,7 +237,7 @@ function Kpi({
   small?: boolean;
 }) {
   return (
-    <div className={cn("bg-card space-y-1 rounded-xl border p-4", tone === "owed" && "border-destructive/30")}>
+    <div className={cn("bg-card shadow-toga space-y-1 rounded-2xl p-4", tone === "owed" && "ring-destructive/25 ring-1")}>
       <p className="text-muted-foreground text-xs">{label}</p>
       <p className={cn("leading-tight font-bold tabular-nums", small ? "truncate text-base" : "text-xl")}>{value}</p>
       {detail && <p className="text-muted-foreground text-sm tabular-nums">{detail}</p>}
@@ -236,7 +248,7 @@ function Kpi({
 function Breakdown({ title, rows, total }: { title: string; rows: BreakdownRow[]; total: string }) {
   const max = Number(rows[0]?.total ?? 0) || 1;
   return (
-    <div className="bg-card rounded-xl border p-4">
+    <div className="bg-card shadow-toga rounded-2xl p-4">
       <h3 className="mb-3 text-sm font-bold">{title}</h3>
       <ul className="space-y-2.5">
         {rows.slice(0, 6).map((row) => (

@@ -51,7 +51,7 @@ export function LoginForm({ next }: { next?: string }) {
             />
           </div>
 
-          <Button type="submit" className="h-11 w-full" disabled={pending}>
+          <Button type="submit" variant="brand" size="lg" className="w-full" disabled={pending}>
             {pending ? "Entrando…" : "Entrar"}
           </Button>
         </form>
