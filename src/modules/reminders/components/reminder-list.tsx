@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useOptimistic, useState, useTransition } from "react";
-import { Check, ChevronRight, Clock, Hash, MessageCircle, Pencil, Phone, Trash2, Undo2 } from "lucide-react";
+import { CalendarClock, Check, ChevronRight, Clock, Hash, MessageCircle, Pencil, Phone, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { formatPhone } from "@/components/phone-link";
@@ -18,9 +18,12 @@ import { softDeleteReminder, toggleCompleted } from "../actions/reminders";
 import type { Placement } from "../buckets";
 import type { ReminderItem } from "../queries";
 import { ReminderFormDialog } from "./reminder-form-dialog";
+import { RescheduleDialog } from "./reschedule-dialog";
 
 export type ReminderRow = ReminderItem & {
   canEdit: boolean;
+  /** Cambiar solo fecha y hora (el mostrador en pedidos que no puede editar). */
+  canReschedule: boolean;
   canDelete: boolean;
   /** En los resultados del buscador: en qué pestaña está. */
   placement?: Placement;
@@ -100,6 +103,7 @@ function ReminderCard({
 }) {
   const [viewing, setViewing] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [rescheduling, setRescheduling] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const remove = useAction(softDeleteReminder, {
     success: "Recordatorio borrado. El dueño puede restaurarlo desde la papelera.",
@@ -107,6 +111,8 @@ function ReminderCard({
   });
   const done = item.isCompleted;
   const urgent = item.priority === "ALTA" && !done;
+  // Quien puede editar cambia la fecha en «Editar»; «Cambiar fecha» es para quien solo puede moverlo.
+  const rescheduleOnly = item.canReschedule && !item.canEdit;
 
   return (
     <li
@@ -149,6 +155,7 @@ function ReminderCard({
 
       <RowMenu
         label={item.client.name}
+        items={rescheduleOnly ? [{ label: "Cambiar fecha", icon: CalendarClock, onSelect: () => setRescheduling(true) }] : []}
         onEdit={item.canEdit ? () => setEditing(true) : undefined}
         onDelete={item.canDelete ? () => setDeleting(true) : undefined}
       />
@@ -162,8 +169,10 @@ function ReminderCard({
           onToggle(completed);
         }}
         onEdit={item.canEdit ? () => (setViewing(false), setEditing(true)) : undefined}
+        onReschedule={rescheduleOnly ? () => (setViewing(false), setRescheduling(true)) : undefined}
         onDelete={item.canDelete ? () => (setViewing(false), setDeleting(true)) : undefined}
       />
+      {rescheduleOnly && <RescheduleDialog item={item} open={rescheduling} onOpenChange={setRescheduling} />}
       {item.canEdit && (
         <ReminderFormDialog
           open={editing}
@@ -254,6 +263,7 @@ function ReminderDetailDialog({
   onOpenChange,
   onToggle,
   onEdit,
+  onReschedule,
   onDelete,
 }: {
   item: ReminderRow;
@@ -261,8 +271,15 @@ function ReminderDetailDialog({
   onOpenChange: (open: boolean) => void;
   onToggle: (completed: boolean) => void;
   onEdit?: () => void;
+  onReschedule?: () => void;
   onDelete?: () => void;
 }) {
+  // «Cambiar fecha» ocupa el lugar de «Editar» (nunca salen los dos).
+  const edit = onEdit
+    ? { label: "Editar", icon: Pencil, onClick: onEdit }
+    : onReschedule
+      ? { label: "Cambiar fecha", icon: CalendarClock, onClick: onReschedule }
+      : null;
   const done = item.isCompleted;
   const folio = formatCode("client", item.client.code);
   return (
@@ -322,17 +339,17 @@ function ReminderDetailDialog({
           )}
         </dl>
 
-        {/* Siempre en columna: la acción principal arriba y a todo lo ancho, Editar/Borrar abajo. */}
+        {/* Siempre en columna: la acción principal arriba y a todo lo ancho, Editar (o Cambiar fecha)/Borrar abajo. */}
         <DialogFooter className="sm:flex-col-reverse sm:justify-start">
-          {(onEdit || onDelete) && (
+          {(edit || onDelete) && (
             <div className="grid grid-cols-2 gap-2">
-              {onEdit && (
-                <Button type="button" variant="outline" size="lg" className={cn("sm:h-10 sm:text-sm", !onDelete && "col-span-2")} onClick={onEdit}>
-                  <Pencil aria-hidden /> Editar
+              {edit && (
+                <Button type="button" variant="outline" size="lg" className={cn("sm:h-10 sm:text-sm", !onDelete && "col-span-2")} onClick={edit.onClick}>
+                  <edit.icon aria-hidden /> {edit.label}
                 </Button>
               )}
               {onDelete && (
-                <Button type="button" variant="outline" size="lg" className={cn("text-destructive sm:h-10 sm:text-sm", !onEdit && "col-span-2")} onClick={onDelete}>
+                <Button type="button" variant="outline" size="lg" className={cn("text-destructive sm:h-10 sm:text-sm", !edit && "col-span-2")} onClick={onDelete}>
                   <Trash2 aria-hidden /> Borrar
                 </Button>
               )}

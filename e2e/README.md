@@ -4,6 +4,8 @@ Recorren la app en Chrome como lo haría una persona: dan de alta proveedores,
 registran adeudos y abonos, filtran pagos y revisan permisos de Dueño y Mostrador.
 
 Crean registros con «E2E» en el nombre o concepto. Úsalas solo en la base de desarrollo.
+Lo que la interfaz no puede crear (un pedido capturado ayer) se prepara con `sql()`
+de `config.cjs`, que usa el `DATABASE_URL` de `.env`.
 
 ## Cómo correrlas (WSL + Chrome de Windows)
 

@@ -22,8 +22,30 @@ async function pickDay(page, trigger, day) {
   await page.locator(`[data-day="${day}"]`).click();
 }
 
+/**
+ * Consulta directa a la base de desarrollo (DATABASE_URL de .env), solo para
+ * preparar lo que la interfaz no puede crear (p. ej. un pedido capturado ayer)
+ * o revisar la auditoría. Nunca apuntar a producción.
+ */
+async function sql(text, params = []) {
+  const url =
+    process.env.DATABASE_URL ??
+    fs
+      .readFileSync(path.join(__dirname, "..", ".env"), "utf8")
+      .match(/^DATABASE_URL=["']?([^"'\r\n]+)/m)?.[1];
+  const { Client } = require("pg");
+  const client = new Client({ connectionString: url });
+  await client.connect();
+  try {
+    return (await client.query(text, params)).rows;
+  } finally {
+    await client.end();
+  }
+}
+
 module.exports = {
   pickDay,
+  sql,
   CHROME,
   B,
   shots: (name) => path.join(dir, name),

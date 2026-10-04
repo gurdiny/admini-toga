@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canAdminister, canCapture, canDelete, canViewTotals } from "./permissions";
+import { canAdminister, canCapture, canDelete, canEdit, canReschedule, canViewTotals } from "./permissions";
 
 const owner = { id: "o", role: "OWNER" as const };
 const staff = { id: "s", role: "STAFF" as const };
@@ -31,6 +31,25 @@ describe("permisos", () => {
 
     it("dueño: siempre", () => {
       expect(canDelete(owner, { createdById: "s", createdAt: mx("2025-01-01T09:00:00") }, now)).toBe(true);
+    });
+  });
+
+  describe("reprogramar un pedido", () => {
+    const now = mx("2026-10-04T12:00:00");
+    const ofOwnerYesterday = { createdById: "o", createdAt: mx("2026-10-03T10:00:00"), isCompleted: false };
+
+    it("mostrador: cambia la fecha de un pedido de otro día aunque no pueda editarlo", () => {
+      expect(canEdit(staff, ofOwnerYesterday, now)).toBe(false);
+      expect(canReschedule(staff, ofOwnerYesterday)).toBe(true);
+    });
+
+    it("dueño: también", () => {
+      expect(canReschedule(owner, ofOwnerYesterday)).toBe(true);
+    });
+
+    it("nadie reprograma un pedido completado", () => {
+      expect(canReschedule(staff, { ...ofOwnerYesterday, isCompleted: true })).toBe(false);
+      expect(canReschedule(owner, { ...ofOwnerYesterday, isCompleted: true })).toBe(false);
     });
   });
 });

@@ -56,6 +56,13 @@ export function reminderDayError(targetDate: Date, previous?: Date | null, now: 
   return "La fecha no puede ser anterior a hoy.";
 }
 
+/** Solo fecha y hora: lo que el mostrador puede mover en cualquier pedido pendiente. */
+export const rescheduleSchema = z.object({
+  id: zId("El recordatorio"),
+  targetDate: zDay,
+  targetTime: zOptionalTime,
+});
+
 export const reminderIdSchema = z.object({ id: zId("El recordatorio") });
 
 export const clientSearchSchema = z.object({

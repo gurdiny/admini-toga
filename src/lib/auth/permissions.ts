@@ -47,7 +47,19 @@ export function canDelete(
  */
 export const canEdit = canDelete;
 
+/**
+ * Cambiar solo la fecha y la hora de un pedido (recordatorio) pendiente,
+ * aunque lo haya capturado otro o en otro día: el cliente pide moverlo y el
+ * mostrador lo atiende sin esperar al dueño. El cliente, el texto del pedido
+ * y la prioridad siguen la regla de `canEdit`. Un pedido completado no se
+ * reprograma (primero se regresa a pendientes).
+ */
+export const canReschedule = (user: Actor, reminder: { isCompleted: boolean }) =>
+  canCapture(user) && !reminder.isCompleted;
+
 export const DELETE_DENIED_MESSAGE =
   "Solo puedes borrar lo que capturaste hoy. Pide al dueño que lo borre.";
+export const RESCHEDULE_DENIED_MESSAGE =
+  "Este pedido ya está completado. Regrésalo a pendientes para cambiar su fecha.";
 export const EDIT_DENIED_MESSAGE =
   "Solo puedes corregir lo que capturaste hoy. Pide al dueño que lo cambie.";

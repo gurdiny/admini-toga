@@ -1,8 +1,9 @@
 // Recordatorios en celular (390 px): pestañas, captura con cliente nuevo
 // (folio automático) y existente, calendario sin días pasados, checkbox
-// optimista, deshacer, ver detalle, permisos de Mostrador y Dueño.
+// optimista, deshacer, ver detalle, permisos de Mostrador y Dueño, y
+// «Cambiar fecha» del mostrador en pedidos de otro día.
 const { chromium } = require("playwright-core");
-const { CHROME, B, shots, log, pickDay } = require("./config.cjs");
+const { CHROME, B, shots, log, pickDay, sql } = require("./config.cjs");
 
 const MOBILE = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: "es-MX" };
 /** Día de México con desfase: "2026-10-03" para ayer. */
@@ -166,11 +167,85 @@ const mxDay = (offset) => {
     await save(dialog);
     await staff.reload();
     await ready(staff);
-    log((await card(staff, "E2E pedido del dueño").getByRole("button", { name: /Opciones/ }).count()) === 0, "Mostrador: sin menú en lo que capturó el dueño");
-    log((await card(staff, "E2E anillo talla 7").getByRole("button", { name: /Opciones/ }).count()) === 1, "Mostrador: sí puede corregir lo suyo de hoy");
+    const menuItems = async (page, text) => {
+      await card(page, text).getByRole("button", { name: /Opciones/ }).click();
+      const items = await page.getByRole("menuitem").allInnerTexts();
+      await page.keyboard.press("Escape");
+      return items.map((t) => t.trim());
+    };
+    let items = await menuItems(staff, "E2E pedido del dueño");
+    log(items.join() === "Cambiar fecha", `Mostrador, en lo que capturó el dueño: solo «Cambiar fecha» (${items.join(", ")})`);
+    items = await menuItems(staff, "E2E anillo talla 7");
+    log(items.includes("Editar") && items.includes("Borrar") && !items.includes("Cambiar fecha"), `Mostrador, en lo suyo de hoy: Editar y Borrar (${items.join(", ")})`);
+
+    // Reprogramar un pedido capturado AYER: el mostrador mueve fecha y hora, pero no edita lo demás.
+    await staff.goto(`${B}/recordatorios?vista=hoy`);
+    dialog = await capture(staff, { search: "lucia e2e", pick: "Lucía E2E", note: "E2E pedido de ayer", day: "hoy", time: "13:00" });
+    await save(dialog);
+    const [{ id: oldId }] = await sql(
+      `UPDATE order_reminders SET "createdAt" = "createdAt" - interval '1 day' WHERE note = 'E2E pedido de ayer' AND "deletedAt" IS NULL RETURNING id`,
+    );
+    await staff.reload();
+    await ready(staff);
+    items = await menuItems(staff, "E2E pedido de ayer");
+    log(items.join() === "Cambiar fecha", `Mostrador, en lo suyo de ayer: solo «Cambiar fecha», sin Editar ni Borrar (${items.join(", ")})`);
+
+    await card(staff, "E2E pedido de ayer").getByRole("button", { name: "Ver detalle" }).click();
+    const oldDetail = staff.getByRole("dialog", { name: "Lucía E2E" });
+    log(
+      (await oldDetail.getByRole("button", { name: "Cambiar fecha" }).isVisible()) && (await oldDetail.getByRole("button", { name: "Editar" }).count()) === 0,
+      "Ver detalle: «Cambiar fecha» en lugar de «Editar»",
+    );
+    await oldDetail.getByRole("button", { name: "Cambiar fecha" }).click();
+    const move = staff.getByRole("dialog", { name: "Cambiar fecha" });
+    await move.waitFor();
+    log(await move.getByText("E2E pedido de ayer").isVisible(), "El pedido se ve como texto…");
+    const fields = await move.locator("input, textarea, select, [role=radio], [role=combobox]").evaluateAll((els) => els.map((el) => el.type || el.getAttribute("role")));
+    log(fields.join() === "time", `…sin campos para el texto, el cliente ni la prioridad: solo la hora (${fields.join(", ")})`);
+    log((await move.getByLabel("Hora límite").inputValue()) === "13:00", "Arranca con la hora que tenía");
+    await move.getByLabel("¿Para cuándo?").click();
+    log(await staff.locator(`[data-day="${mxDay(-1)}"]`).isDisabled(), "Calendario de «Cambiar fecha»: ayer no se puede elegir");
+    await staff.screenshot({ path: shots("e2e-rec-cambiar-fecha.png") });
+    await staff.keyboard.press("Escape");
+    await pickDay(staff, move.getByLabel("¿Para cuándo?"), mxDay(4));
+    await move.getByLabel("Hora límite").fill("11:00");
+    await move.getByRole("button", { name: "Guardar fecha" }).click();
+    await move.waitFor({ state: "hidden" });
+    await staff.getByText("Fecha actualizada.").waitFor();
+    await card(staff, "E2E pedido de ayer").waitFor({ state: "detached" });
+    log(true, "Guardar: sale de «Hoy»");
+    await openTab(staff, "Mañana");
+    const moved = staff.locator("section", { hasText: "Más adelante" }).locator("li", { hasText: "E2E pedido de ayer" });
+    log(await moved.getByText(/antes de las 11:00/).isVisible(), "Aparece en «Más adelante» con la hora nueva (11:00)");
+
+    const [audit] = await sql(
+      `SELECT a.changes::text AS changes, u.email FROM audit_logs a JOIN users u ON u.id = a."userId"
+       WHERE a."entityId" = $1 AND a.action = 'UPDATE' ORDER BY a."createdAt" DESC LIMIT 1`,
+      [oldId],
+    );
+    log(
+      audit?.email === "mostrador@joyeria.local" && audit.changes.includes("targetDate") && audit.changes.includes("targetTime") && !audit.changes.includes('"note"'),
+      `Auditoría: UPDATE del mostrador con fecha y hora, sin tocar la nota`,
+    );
+
+    // El dueño sigue pudiendo todo en ese mismo pedido.
+    await owner.goto(`${B}/recordatorios`);
+    await ready(owner);
+    const ownerCard = owner.locator("section", { hasText: "Más adelante" }).locator("li", { hasText: "E2E pedido de ayer" });
+    await ownerCard.getByRole("button", { name: /Opciones/ }).click();
+    items = (await owner.getByRole("menuitem").allInnerTexts()).map((t) => t.trim());
+    log(items.includes("Editar") && items.includes("Borrar") && !items.includes("Cambiar fecha"), `Dueño: Editar y Borrar (${items.join(", ")})`);
+    await owner.getByRole("menuitem", { name: "Editar" }).click();
+    const edit = owner.getByRole("dialog", { name: "Editar recordatorio" });
+    await edit.getByLabel("¿Qué hay que hacer?").fill("E2E pedido de ayer, corregido por el dueño");
+    await edit.getByRole("button", { name: "Guardar cambios" }).click();
+    await edit.waitFor({ state: "hidden" });
+    log(await owner.locator("li", { hasText: "E2E pedido de ayer, corregido por el dueño" }).isVisible(), "Dueño: edita el texto del pedido");
 
     // Si la acción falla, el checkbox se revierte solo
-    await owner.reload();
+    await owner.goto(`${B}/recordatorios?vista=hoy`);
+    await staff.goto(`${B}/recordatorios?vista=hoy`);
+    await ready(staff);
     await ready(owner);
     await card(owner, "E2E anillo talla 7").getByRole("button", { name: /Opciones/ }).click();
     await owner.getByRole("menuitem", { name: "Borrar" }).click();

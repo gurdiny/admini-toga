@@ -57,6 +57,17 @@ const DIALOGS = [
   ["filtros-auditoria-calendario", "/admin/auditoria", (p) => p.getByLabel("Desde").click()],
   // Solo en celular: el menú de la barra inferior.
   ["menu", "/", (p) => p.getByRole("button", { name: "Menú" }).click(), { mobileOnly: true }],
+  // Mostrador en un pedido que no puede editar (de otro día o de otro usuario). Va al final:
+  // deja la sesión como mostrador.
+  ["cambiar-fecha", "/api/dev/login?as=mostrador@joyeria.local&next=%2Frecordatorios%3Fq%3Da", async (p) => {
+    for (const menu of await p.getByRole("button", { name: /^Opciones de / }).locator("visible=true").all()) {
+      await menu.click();
+      const item = p.getByRole("menuitem", { name: "Cambiar fecha" });
+      if (await item.count()) return item.click();
+      await p.keyboard.press("Escape");
+    }
+    throw new Error("Ningún pedido con «Cambiar fecha» para el mostrador");
+  }],
 ];
 
 /** Problemas de diseño en lo que se ve ahora mismo. */

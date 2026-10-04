@@ -3,14 +3,21 @@
 import { z } from "zod";
 import { defineAction } from "@/lib/action";
 import { recordAudit, withAudit } from "@/lib/audit";
-import { canDelete, canEdit, DELETE_DENIED_MESSAGE, EDIT_DENIED_MESSAGE } from "@/lib/auth/permissions";
+import {
+  canDelete,
+  canEdit,
+  canReschedule,
+  DELETE_DENIED_MESSAGE,
+  EDIT_DENIED_MESSAGE,
+  RESCHEDULE_DENIED_MESSAGE,
+} from "@/lib/auth/permissions";
 import { db } from "@/lib/db";
 import { BusinessError } from "@/lib/errors";
 import { toNameKey } from "@/lib/normalize";
 import { zId } from "@/lib/validation";
 import type { Prisma } from "@/generated/prisma/client";
 import { findClients } from "../queries";
-import { clientSearchSchema, reminderDayError, reminderIdSchema, reminderSchema, toggleReminderSchema } from "../schemas";
+import { clientSearchSchema, reminderDayError, reminderIdSchema, reminderSchema, rescheduleSchema, toggleReminderSchema } from "../schemas";
 
 const REVALIDATE = ["/recordatorios", "/clientes"];
 
@@ -82,6 +89,27 @@ export const updateReminder = defineAction(
         assertReminderDay(data.targetDate, current.targetDate);
         const clientId = await resolveClient(tx, data, user.id);
         return tx.orderReminder.update({ where: { id }, data: reminderFields(data, clientId) });
+      },
+    );
+  },
+);
+
+/**
+ * Cambiar solo la fecha y la hora (el cliente pidió moverlo). A diferencia de
+ * `updateReminder`, lo puede hacer el mostrador aunque el pedido sea de otro
+ * día o de otro usuario (`canReschedule`); no toca cliente, nota ni prioridad.
+ */
+export const rescheduleReminder = defineAction(
+  { role: "STAFF", schema: rescheduleSchema, revalidate: REVALIDATE },
+  async ({ id, targetDate, targetTime }, { user }) => {
+    await withAudit(
+      { userId: user.id, action: "UPDATE", entity: "OrderReminder", before: (tx) => tx.orderReminder.findUnique({ where: { id } }) },
+      async (tx) => {
+        const current = await tx.orderReminder.findFirst({ where: { id, deletedAt: null } });
+        if (!current) throw new BusinessError("El recordatorio ya no existe. Recarga la página.");
+        if (!canReschedule(user, current)) throw new BusinessError(RESCHEDULE_DENIED_MESSAGE);
+        assertReminderDay(targetDate, current.targetDate);
+        return tx.orderReminder.update({ where: { id }, data: { targetDate, targetTime } });
       },
     );
   },

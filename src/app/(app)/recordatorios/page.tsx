@@ -5,7 +5,7 @@ import { EmptyState } from "@/components/empty-state";
 import { ExportMenu } from "@/components/export-menu";
 import { PageHeader } from "@/components/page-header";
 import { Input } from "@/components/ui/input";
-import { canDelete, canEdit } from "@/lib/auth/permissions";
+import { canDelete, canEdit, canReschedule } from "@/lib/auth/permissions";
 import { requireUser } from "@/lib/auth/session";
 import { formatDay, getToday, getTomorrow } from "@/lib/date";
 import { getSettings, requireModule } from "@/lib/settings";
@@ -60,7 +60,7 @@ export default async function RemindersPage({ searchParams }: PageProps<"/record
   ]);
   // Permisos por fila calculados aquí; el cliente solo recibe booleanos.
   const withPermissions = (list: ReminderItem[]): ReminderRow[] =>
-    list.map((item) => ({ ...item, canEdit: canEdit(user, item, now), canDelete: canDelete(user, item, now) }));
+    list.map((item) => ({ ...item, canEdit: canEdit(user, item, now), canReschedule: canReschedule(user, item), canDelete: canDelete(user, item, now) }));
 
   const dayTitle =
     bucket === "manana" ? formatDay(getTomorrow(now), "EEEE d 'de' MMMM") : bucket === "hoy" ? formatDay(getToday(now), "EEEE d 'de' MMMM") : null;

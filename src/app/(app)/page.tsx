@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { CalendarCheck, ChevronRight, Wallet } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
-import { canDelete, canEdit, canViewTotals } from "@/lib/auth/permissions";
+import { canDelete, canEdit, canReschedule, canViewTotals } from "@/lib/auth/permissions";
 import { requireUser } from "@/lib/auth/session";
 import { formatDay, getRange, getToday } from "@/lib/date";
 import { formatMXN } from "@/lib/money";
@@ -81,7 +81,7 @@ export default async function Home() {
               />
             ) : (
               <ReminderList
-                items={today.slice(0, TODAY_PREVIEW).map((item) => ({ ...item, canEdit: canEdit(user, item, now), canDelete: canDelete(user, item, now) }))}
+                items={today.slice(0, TODAY_PREVIEW).map((item) => ({ ...item, canEdit: canEdit(user, item, now), canReschedule: canReschedule(user, item), canDelete: canDelete(user, item, now) }))}
               />
             )}
           </section>
