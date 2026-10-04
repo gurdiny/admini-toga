@@ -14,10 +14,23 @@ import { formatCode } from "@/lib/codes";
 import { formatDay } from "@/lib/date";
 import { cn } from "@/lib/utils";
 import { softDeleteReminder, toggleCompleted } from "../actions/reminders";
+import type { Placement } from "../buckets";
 import type { ReminderItem } from "../queries";
 import { ReminderFormDialog } from "./reminder-form-dialog";
 
-export type ReminderRow = ReminderItem & { canEdit: boolean; canDelete: boolean };
+export type ReminderRow = ReminderItem & {
+  canEdit: boolean;
+  canDelete: boolean;
+  /** En los resultados del buscador: en qué pestaña está. */
+  placement?: Placement;
+};
+
+const PLACEMENT_BADGE: Partial<Record<Placement, { label: string; className: string }>> = {
+  hoy: { label: "Hoy", className: "bg-toga-pink-soft text-toga-pink-strong" },
+  manana: { label: "Mañana", className: "bg-muted text-foreground" },
+  atrasados: { label: "Atrasado", className: "bg-destructive/10 text-destructive" },
+  despues: { label: "Más adelante", className: "bg-muted text-foreground" },
+};
 
 type Props = {
   items: ReminderRow[];
@@ -106,11 +119,14 @@ function ReminderCard({
       <div className="min-w-0 flex-1 space-y-1.5 pt-0.5">
         <div className="flex items-start justify-between gap-2">
           <p className={cn("text-base leading-snug font-bold", done && "text-muted-foreground line-through decoration-1")}>{item.client.name}</p>
-          {urgent && (
-            <Badge variant="destructive" className="shrink-0">
-              Alta
-            </Badge>
-          )}
+          <span className="flex shrink-0 gap-1">
+            {item.placement && PLACEMENT_BADGE[item.placement] && !done && (
+              <Badge variant="secondary" className={PLACEMENT_BADGE[item.placement]!.className}>
+                {PLACEMENT_BADGE[item.placement]!.label}
+              </Badge>
+            )}
+            {urgent && <Badge variant="destructive">Alta</Badge>}
+          </span>
         </div>
         <ClientTags item={item} />
         <p className={cn("line-clamp-2 text-sm whitespace-pre-line", done && "text-muted-foreground")}>{item.note}</p>
@@ -250,7 +266,7 @@ function ReminderDetailDialog({
   const folio = formatCode("client", item.client.code);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>{item.client.name}</DialogTitle>
           <DialogDescription>Folio {folio}</DialogDescription>

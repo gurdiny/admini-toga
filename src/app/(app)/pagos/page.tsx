@@ -316,6 +316,7 @@ function Actions({
   return (
     <PaymentRowActions
       payment={payment}
+      detail={{ supplierName: payment.supplierName, categoryName: payment.categoryName, debtCode: payment.debtCode, trace: payment.trace }}
       options={options}
       defaultMethod={defaultMethod}
       canEdit={canEdit(user, payment)}

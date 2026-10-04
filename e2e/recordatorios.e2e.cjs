@@ -182,6 +182,24 @@ const mxDay = (offset) => {
     await card(staff, "E2E anillo talla 7").locator('[role=checkbox][aria-checked="false"]').waitFor({ timeout: 3000 });
     log(true, "Error → aviso y el checkbox regresa a sin marcar");
 
+    // Buscador: por folio y por texto del pedido, en todas las pestañas
+    await staff.goto(`${B}/recordatorios`);
+    await ready(staff);
+    await staff.getByLabel("Buscar recordatorio").fill("cli-1");
+    await staff.getByLabel("Buscar recordatorio").press("Enter");
+    await staff.waitForURL(/q=cli-1/);
+    const results = staff.locator("section", { hasText: "para «cli-1»" });
+    log(await results.locator("li", { hasText: "E2E limpieza de cadena" }).getByText("Más adelante").isVisible(), "Buscar «cli-1» → pedidos de CLI-0001 con su pestaña («Más adelante»)");
+    log((await results.locator("li", { hasText: "Lucía E2E" }).count()) === 0, "…y solo de ese cliente");
+    await staff.getByLabel("Buscar recordatorio").fill("pedido del dueño");
+    await staff.getByLabel("Buscar recordatorio").press("Enter");
+    await staff.getByText("para «pedido del dueño»").waitFor();
+    log(await staff.locator("li", { hasText: "E2E pedido del dueño" }).getByText("Hoy", { exact: true }).isVisible(), "Buscar por texto del pedido → «Hoy»");
+    await staff.screenshot({ path: shots("e2e-rec-busqueda.png"), fullPage: true });
+    await staff.getByRole("link", { name: "Quitar búsqueda" }).click();
+    await staff.waitForURL((url) => !url.search.includes("q="));
+    log(true, "«Quitar búsqueda» regresa a las pestañas");
+
     // Borrar lo propio de hoy con confirmación
     await staff.goto(`${B}/recordatorios`);
     await ready(staff);

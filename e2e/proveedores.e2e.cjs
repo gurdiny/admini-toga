@@ -2,6 +2,20 @@ const { chromium } = require("playwright-core");
 const { CHROME, B, shots, log } = require("./config.cjs");
 const balance = async (page) => (await page.locator("#saldo + span").innerText()).trim();
 
+/** Cuántos pagos se pueden editar/borrar: todos tienen menú (Ver detalle), no todos tienen «Borrar». */
+async function editablePayments(page) {
+  const menus = page.getByRole("button", { name: /Opciones de PAG-/ });
+  let editable = 0;
+  for (let i = 0; i < (await menus.count()); i++) {
+    await menus.nth(i).click();
+    await page.getByRole("menuitem", { name: "Ver detalle" }).waitFor();
+    if (await page.getByRole("menuitem", { name: "Borrar" }).isVisible()) editable++;
+    await page.keyboard.press("Escape");
+    await page.getByRole("menu").waitFor({ state: "hidden" });
+  }
+  return { editable, total: await menus.count() };
+}
+
 (async () => {
   const browser = await chromium.launch({ executablePath: CHROME, headless: true });
   const page = await browser.newPage({ viewport: { width: 420, height: 900 }, locale: "es-MX" });
@@ -83,15 +97,17 @@ const balance = async (page) => (await page.locator("#saldo + span").innerText()
     await page.waitForLoadState("networkidle"); // que React hidrate antes de hacer clic
     await page.getByRole("link", { name: /Platería Taxco Hernández/ }).click();
     await page.getByRole("heading", { name: "Platería Taxco Hernández" }).waitFor();
-    const menus = await page.getByRole("button", { name: /Opciones de PAG-/ }).count();
-    log(menus === 2, `Taxco: el Mostrador solo puede tocar sus 2 pagos de hoy (de 3) → ${menus} menús`);
+    const staffView = await editablePayments(page);
+    // Los 2 que capturó hoy sí; los del dueño o de otros días, no (la cantidad total depende de los datos).
+    log(staffView.editable >= 2 && staffView.editable < staffView.total, `Taxco: el Mostrador edita/borra solo lo suyo de hoy (${staffView.editable} de ${staffView.total}); todos tienen «Ver detalle»`);
 
     // ── Dueño ──
     await page.goto(`${B}/api/dev/login?as=dueno@joyeria.local&next=/proveedores`);
     await page.waitForLoadState("networkidle"); // que React hidrate antes de hacer clic
     await page.getByRole("link", { name: /Platería Taxco Hernández/ }).click();
     await page.getByRole("heading", { name: "Platería Taxco Hernández" }).waitFor();
-    log((await page.getByRole("button", { name: /Opciones de PAG-/ }).count()) === 3, "Dueño puede tocar los 3 pagos");
+    const ownerView = await editablePayments(page);
+    log(ownerView.editable === ownerView.total, `Dueño puede editar/borrar todos (${ownerView.editable} de ${ownerView.total})`);
     log((await page.getByRole("button", { name: "Desactivar" }).count()) === 1, "Dueño ve «Desactivar»");
   } catch (error) {
     console.log("✗ FALLÓ:", error.message.split("\n")[0]);

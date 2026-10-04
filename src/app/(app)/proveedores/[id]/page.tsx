@@ -233,6 +233,7 @@ export default async function SupplierPage({ params }: PageProps<"/proveedores/[
                   {entry.payment && (
                     <PaymentRowActions
                       payment={{ ...entry.payment, code: entry.code }}
+                      detail={{ supplierName: supplier.name, categoryName: entry.categoryName ?? "", debtCode: entry.debtCode, trace: entry.trace! }}
                       options={options}
                       defaultMethod={defaultMethod}
                       canEdit={canEdit(user, entry)}

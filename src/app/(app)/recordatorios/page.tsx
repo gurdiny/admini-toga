@@ -1,17 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CalendarCheck, CalendarClock, CircleCheckBig, PartyPopper } from "lucide-react";
+import { CalendarCheck, CalendarClock, CircleCheckBig, PartyPopper, Search, SearchX } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
+import { Input } from "@/components/ui/input";
 import { canDelete, canEdit } from "@/lib/auth/permissions";
 import { requireUser } from "@/lib/auth/session";
 import { formatDay, getToday, getTomorrow } from "@/lib/date";
 import { getSettings, requireModule } from "@/lib/settings";
 import { cn } from "@/lib/utils";
-import { BUCKET_LABELS, BUCKETS, bucketHref, COMPLETED_WINDOW_DAYS, parseBucket, type Bucket } from "@/modules/reminders/buckets";
+import { BUCKET_LABELS, BUCKETS, bucketHref, classifyReminder, COMPLETED_WINDOW_DAYS, parseBucket, type Bucket } from "@/modules/reminders/buckets";
 import { NewReminderButton } from "@/modules/reminders/components/new-reminder-button";
 import { ReminderList, type ReminderRow } from "@/modules/reminders/components/reminder-list";
-import { getReminderCounts, getReminders, type ReminderItem } from "@/modules/reminders/queries";
+import { getReminderCounts, getReminders, searchReminders, type ReminderItem } from "@/modules/reminders/queries";
 
 export const metadata: Metadata = { title: "Recordatorios" };
 
@@ -43,16 +44,18 @@ export default async function RemindersPage({ searchParams }: PageProps<"/record
   const user = await requireUser();
   const params = await searchParams;
   const bucket = parseBucket(params.vista);
+  const q = (typeof params.q === "string" ? params.q : "").trim();
   // ?todos=1: Atrasados sin el límite de días de Configuración.
   const allOverdue = bucket === "atrasados" && params.todos === "1";
   // Un solo «ahora» para toda la página: contadores y listas no se desfasan a medianoche.
   const now = new Date();
 
-  const [counts, items, later, settings] = await Promise.all([
+  const [counts, items, later, settings, found] = await Promise.all([
     getReminderCounts(now, { allOverdue }),
-    getReminders(bucket, now, { allOverdue }),
-    bucket === "manana" ? getReminders("despues", now) : null,
+    q ? [] : getReminders(bucket, now, { allOverdue }),
+    bucket === "manana" && !q ? getReminders("despues", now) : null,
     getSettings(),
+    q ? searchReminders(q) : null,
   ]);
   // Permisos por fila calculados aquí; el cliente solo recibe booleanos.
   const withPermissions = (list: ReminderItem[]): ReminderRow[] =>
@@ -70,9 +73,25 @@ export default async function RemindersPage({ searchParams }: PageProps<"/record
         actions={<NewReminderButton className="hidden md:inline-flex" />}
       />
 
+      <form className="mb-3" role="search">
+        {bucket !== "manana" && <input type="hidden" name="vista" value={bucket} />}
+        <div className="relative">
+          <Search className="text-muted-foreground absolute top-1/2 left-4 size-4 -translate-y-1/2" aria-hidden />
+          <Input
+            name="q"
+            type="search"
+            enterKeyHint="search"
+            defaultValue={q}
+            placeholder="Buscar cliente, folio, teléfono o pedido"
+            aria-label="Buscar recordatorio"
+            className="bg-card h-12 rounded-full pl-10"
+          />
+        </div>
+      </form>
+
       <nav className="bg-muted mb-4 grid grid-cols-4 gap-1 rounded-2xl p-1" aria-label="Pestañas de recordatorios">
         {BUCKETS.map((b) => {
-          const active = b === bucket;
+          const active = b === bucket && !q;
           const alert = b === "atrasados" && counts.atrasados > 0;
           return (
             <Link
@@ -97,32 +116,52 @@ export default async function RemindersPage({ searchParams }: PageProps<"/record
       {/* En celular la captura va arriba de la lista, a todo lo ancho. */}
       <NewReminderButton className="mb-4 h-12 w-full md:hidden" />
 
-      <section aria-labelledby="lista" className="space-y-3">
-        <h2 id="lista" className="text-muted-foreground text-sm first-letter:uppercase">
-          {dayTitle ?? (bucket === "completados" ? `Últimos ${COMPLETED_WINDOW_DAYS} días` : "Pendientes de días anteriores")}
-        </h2>
-        {items.length === 0 ? (
-          <EmptyState icon={empty.icon} title={empty.title} description={empty.description} />
-        ) : (
-          <ReminderList items={withPermissions(items)} showDate={bucket === "atrasados" || bucket === "completados"} />
-        )}
-        {bucket === "atrasados" && (counts.antiguos > 0 || allOverdue) && (
-          <p className="bg-card shadow-toga flex flex-wrap items-center justify-between gap-x-3 rounded-2xl px-4 py-2 text-sm">
-            <span className="text-muted-foreground py-2">
-              {allOverdue
-                ? "Mostrando todos los atrasados."
-                : `${counts.antiguos} pedido${counts.antiguos === 1 ? "" : "s"} de hace más de ${settings.overdueLookbackDays} días no ${counts.antiguos === 1 ? "se muestra" : "se muestran"}.`}
-            </span>
-            <Link
-              href={allOverdue ? bucketHref("atrasados") : `${bucketHref("atrasados")}&todos=1`}
-              scroll={false}
-              className="text-toga-pink-strong inline-flex min-h-10 items-center font-bold"
-            >
-              {allOverdue ? `Solo los últimos ${settings.overdueLookbackDays} días` : "Verlos"}
+      {found ? (
+        <section aria-labelledby="resultados" className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-x-3">
+            <h2 id="resultados" className="text-muted-foreground text-sm">
+              {found.length === 0
+                ? `Nada coincide con «${q}»`
+                : `${found.length}${found.length === 60 ? "+" : ""} resultado${found.length === 1 ? "" : "s"} para «${q}»`}
+            </h2>
+            <Link href={bucketHref(bucket)} className="text-toga-pink-strong inline-flex min-h-10 items-center text-sm font-bold">
+              Quitar búsqueda
             </Link>
-          </p>
-        )}
-      </section>
+          </div>
+          {found.length === 0 ? (
+            <EmptyState icon={SearchX} title={`Ningún pedido coincide con «${q}»`} description="Prueba con el folio (CLI-0005), el teléfono o una palabra del pedido." />
+          ) : (
+            <ReminderList items={withPermissions(found).map((item) => ({ ...item, placement: classifyReminder(item, now) }))} showDate />
+          )}
+        </section>
+      ) : (
+        <section aria-labelledby="lista" className="space-y-3">
+          <h2 id="lista" className="text-muted-foreground text-sm first-letter:uppercase">
+            {dayTitle ?? (bucket === "completados" ? `Últimos ${COMPLETED_WINDOW_DAYS} días` : "Pendientes de días anteriores")}
+          </h2>
+          {items.length === 0 ? (
+            <EmptyState icon={empty.icon} title={empty.title} description={empty.description} />
+          ) : (
+            <ReminderList items={withPermissions(items)} showDate={bucket === "atrasados" || bucket === "completados"} />
+          )}
+          {bucket === "atrasados" && (counts.antiguos > 0 || allOverdue) && (
+            <p className="bg-card shadow-toga flex flex-wrap items-center justify-between gap-x-3 rounded-2xl px-4 py-2 text-sm">
+              <span className="text-muted-foreground py-2">
+                {allOverdue
+                  ? "Mostrando todos los atrasados."
+                  : `${counts.antiguos} pedido${counts.antiguos === 1 ? "" : "s"} de hace más de ${settings.overdueLookbackDays} días no ${counts.antiguos === 1 ? "se muestra" : "se muestran"}.`}
+              </span>
+              <Link
+                href={allOverdue ? bucketHref("atrasados") : `${bucketHref("atrasados")}&todos=1`}
+                scroll={false}
+                className="text-toga-pink-strong inline-flex min-h-10 items-center font-bold"
+              >
+                {allOverdue ? `Solo los últimos ${settings.overdueLookbackDays} días` : "Verlos"}
+              </Link>
+            </p>
+          )}
+        </section>
+      )}
 
       {later && later.length > 0 && (
         <section aria-labelledby="despues" className="mt-8 space-y-3">

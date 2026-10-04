@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
-import { dbToDay, dayRangeWhere, type DayKey, type DayRange } from "@/lib/date";
+import { dbToDay, dayRangeWhere, formatForDisplay, type DayKey, type DayRange } from "@/lib/date";
 import { moneyToString, toDecimal, ZERO, type Decimal } from "@/lib/money";
 import { toNameKey } from "@/lib/normalize";
 import { parseCode } from "@/lib/codes";
@@ -191,6 +191,9 @@ export type StatementEntry = {
   paymentMethod: PaymentMethod | null;
   createdById: string;
   createdAt: Date;
+  /** Solo en pagos: quién y cuándo (Ver detalle). */
+  trace: PaymentTrace | null;
+  categoryName: string | null;
   /** Datos para editar, solo en pagos. */
   payment: {
     id: string;
@@ -212,9 +215,10 @@ export async function getSupplierStatement(supplierId: string): Promise<Statemen
     db.supplierDebt.findMany({ where: { supplierId, deletedAt: null } }),
     db.supplierPayment.findMany({
       where: { supplierId, deletedAt: null },
-      include: { debt: { select: { code: true } } },
+      include: { debt: { select: { code: true } }, createdBy: { select: { name: true } }, category: { select: { name: true } } },
     }),
   ]);
+  const traces = await paymentTraces(payments);
 
   type Raw = Omit<StatementEntry, "balanceAfter"> & { sortDate: number; sortCreated: number; delta: Decimal };
   const raw: Raw[] = [
@@ -230,6 +234,8 @@ export async function getSupplierStatement(supplierId: string): Promise<Statemen
       paymentMethod: null,
       createdById: d.createdById,
       createdAt: d.createdAt,
+      trace: null,
+      categoryName: null,
       payment: null,
       sortDate: d.date.getTime(),
       sortCreated: d.createdAt.getTime(),
@@ -247,6 +253,8 @@ export async function getSupplierStatement(supplierId: string): Promise<Statemen
       paymentMethod: p.paymentMethod,
       createdById: p.createdById,
       createdAt: p.createdAt,
+      trace: traces.get(p.id)!,
+      categoryName: p.category.name,
       payment: {
         id: p.id,
         date: dbToDay(p.date),
@@ -278,6 +286,47 @@ export async function getSupplierStatement(supplierId: string): Promise<Statemen
     addTo(running, entry.currency, delta);
     return { ...entry, balanceAfter: moneyToString(running.get(entry.currency) ?? ZERO) };
   });
+}
+
+// ─── Traza: quién y cuándo ─────────────────────────────────────────────────
+
+/** Para «Ver detalle»: hora exacta de captura y última edición (de la auditoría). */
+export type PaymentTrace = {
+  /** "domingo 4 de octubre de 2026, 13:03:27" en hora de México. */
+  createdAt: string;
+  createdBy: string;
+  editedAt: string | null;
+  editedBy: string | null;
+  edits: number;
+};
+
+const TRACE_FORMAT = "EEEE d 'de' MMMM 'de' yyyy, HH:mm:ss";
+
+async function paymentTraces(payments: { id: string; createdAt: Date; createdBy: { name: string } }[]): Promise<Map<string, PaymentTrace>> {
+  const edits = payments.length
+    ? await db.auditLog.findMany({
+        where: { entity: "SupplierPayment", action: "UPDATE", entityId: { in: payments.map((p) => p.id) } },
+        orderBy: { createdAt: "desc" },
+        include: { user: { select: { name: true } } },
+      })
+    : [];
+  const byPayment = new Map<string, typeof edits>();
+  for (const log of edits) byPayment.set(log.entityId, [...(byPayment.get(log.entityId) ?? []), log]);
+  return new Map(
+    payments.map((p) => {
+      const logs = byPayment.get(p.id) ?? [];
+      return [
+        p.id,
+        {
+          createdAt: formatForDisplay(p.createdAt, TRACE_FORMAT),
+          createdBy: p.createdBy.name,
+          editedAt: logs[0] ? formatForDisplay(logs[0].createdAt, TRACE_FORMAT) : null,
+          editedBy: logs[0]?.user.name ?? null,
+          edits: logs.length,
+        },
+      ];
+    }),
+  );
 }
 
 // ─── Pagos ─────────────────────────────────────────────────────────────────
@@ -315,6 +364,7 @@ export type PaymentListItem = {
   createdById: string;
   createdByName: string;
   createdAt: Date;
+  trace: PaymentTrace;
 };
 
 function paymentWhere(filters: PaymentFilters): Prisma.SupplierPaymentWhereInput {
@@ -362,6 +412,7 @@ export async function getPayments(filters: PaymentFilters): Promise<{ items: Pay
     }),
     db.supplierPayment.count({ where }),
   ]);
+  const traces = await paymentTraces(rows);
 
   return {
     total,
@@ -384,6 +435,7 @@ export async function getPayments(filters: PaymentFilters): Promise<{ items: Pay
       createdById: p.createdById,
       createdByName: p.createdBy.name,
       createdAt: p.createdAt,
+      trace: traces.get(p.id)!,
     })),
   };
 }

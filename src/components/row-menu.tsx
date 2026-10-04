@@ -1,6 +1,6 @@
 "use client";
 
-import { MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { Eye, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -9,9 +9,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-/** Menú «⋮» de una fila con Editar y Borrar. Sin permisos, no se muestra. */
-export function RowMenu({ label, onEdit, onDelete }: { label: string; onEdit?: () => void; onDelete?: () => void }) {
-  if (!onEdit && !onDelete) return null;
+/** Menú «⋮» de una fila: Ver detalle, Editar y Borrar. Sin ninguna acción, no se muestra. */
+export function RowMenu({
+  label,
+  onView,
+  onEdit,
+  onDelete,
+}: {
+  label: string;
+  onView?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+}) {
+  if (!onView && !onEdit && !onDelete) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -20,6 +30,12 @@ export function RowMenu({ label, onEdit, onDelete }: { label: string; onEdit?: (
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        {onView && (
+          <DropdownMenuItem onSelect={onView}>
+            <Eye aria-hidden />
+            Ver detalle
+          </DropdownMenuItem>
+        )}
         {onEdit && (
           <DropdownMenuItem onSelect={onEdit}>
             <Pencil aria-hidden />

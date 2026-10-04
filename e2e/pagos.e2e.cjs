@@ -70,7 +70,8 @@ const money = (text) => Number(text.replace(/[^\d.]/g, ""));
     await page.screenshot({ path: shots("e2e-pago-form.png") });
     await dialog.getByRole("button", { name: "Registrar pago" }).click();
     await dialog.waitFor({ state: "hidden" });
-    log(await page.locator("table").getByText("E2E primer pago").isVisible(), "Pago al proveedor nuevo registrado");
+    await page.locator("table").getByText("E2E primer pago").waitFor();
+    log(true, "Pago al proveedor nuevo registrado");
 
     // Errores de validación visibles
     await page.getByRole("button", { name: "Registrar pago" }).first().click();
@@ -88,6 +89,24 @@ const money = (text) => Number(text.replace(/[^\d.]/g, ""));
     await page.waitForLoadState("networkidle"); // que React hidrate antes de hacer clic
     const concepts = await page.locator("table tbody tr td:nth-child(3) span.block").allInnerTexts();
     log(concepts.join("|") === "E2E primer pago|E2E pago de hoy|E2E pago de ayer", `Buscar «E2E p» + ordenar por monto ↑ → ${concepts.join(", ")}`);
+
+    // Ver detalle: hora exacta y quién; después de editar, la última edición
+    await page.getByRole("row", { name: /E2E pago de hoy/ }).getByRole("button", { name: /Opciones de PAG-/ }).click();
+    await page.getByRole("menuitem", { name: "Ver detalle" }).click();
+    let detail = page.getByRole("dialog", { name: /^Pago PAG-/ });
+    const registered = (await detail.locator("dd", { hasText: /\d{2}:\d{2}:\d{2}/ }).first().innerText()).replace(/\s+/g, " ");
+    log(/por Gera Urias$/.test(registered), `Ver detalle: hora exacta y quién → «${registered}»`);
+    await detail.getByRole("button", { name: "Editar" }).click();
+    const edit = page.getByRole("dialog", { name: /^Editar PAG-/ });
+    await edit.getByLabel("Concepto").fill("E2E pago de hoy editado");
+    await edit.getByRole("button", { name: "Guardar cambios" }).click();
+    await edit.waitFor({ state: "hidden" });
+    await page.getByRole("row", { name: /E2E pago de hoy editado/ }).getByRole("button", { name: /Opciones de PAG-/ }).click();
+    await page.getByRole("menuitem", { name: "Ver detalle" }).click();
+    detail = page.getByRole("dialog", { name: /^Pago PAG-/ });
+    log(await detail.getByText("Última edición").isVisible(), "Después de editar: «Última edición» con hora y quién");
+    await page.screenshot({ path: shots("e2e-pago-detalle.png") });
+    await page.keyboard.press("Escape");
 
     // Borrar
     await page.getByRole("row", { name: /E2E pago de ayer/ }).getByRole("button", { name: /Opciones de PAG-/ }).click();

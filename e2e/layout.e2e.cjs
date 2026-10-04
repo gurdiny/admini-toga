@@ -11,6 +11,7 @@ const PAGES = [
   ["inicio", "/"],
   ["recordatorios", "/recordatorios"],
   ["completados", "/recordatorios?vista=completados"],
+  ["recordatorios-busqueda", "/recordatorios?q=a"],
   ["pagos", "/pagos"],
   ["proveedores", "/proveedores"],
   ["admin", "/admin"],
@@ -40,6 +41,10 @@ const DIALOGS = [
     },
   ],
   ["nuevo-proveedor", "/proveedores", (p) => p.getByRole("button", { name: "Nuevo proveedor" }).locator("visible=true").first().click()],
+  ["detalle-pago", "/pagos", async (p) => {
+    await p.getByRole("button", { name: /Opciones de PAG-/ }).locator("visible=true").first().click();
+    await p.getByRole("menuitem", { name: "Ver detalle" }).click();
+  }],
   ["nueva-categoria", "/admin/catalogos", (p) => p.getByRole("button", { name: "Nueva categoría" }).click()],
   ["nuevo-usuario", "/admin/usuarios", (p) => p.getByRole("button", { name: "Nuevo usuario" }).click()],
   ["filtros-auditoria-calendario", "/admin/auditoria", (p) => p.getByLabel("Desde").click()],
@@ -62,8 +67,11 @@ function audit(mobile) {
   if (document.documentElement.scrollWidth > vw + 1) {
     problems.push(`la página mide ${document.documentElement.scrollWidth}px de ancho (pantalla ${vw}px)`);
   }
-  for (const dialog of document.querySelectorAll('[role="dialog"], [role="alertdialog"]')) {
+  for (const dialog of document.querySelectorAll('[data-slot="dialog-content"]')) {
     if (dialog.scrollWidth > dialog.clientWidth + 1) problems.push(`diálogo con scroll horizontal (${dialog.scrollWidth} > ${dialog.clientWidth})`);
+    // En iPhone el panel no debe poder arrastrarse de lado (ni al cerrarse el teclado).
+    const s = getComputedStyle(dialog);
+    if (s.overflowX !== "hidden" || !s.touchAction.includes("pan-y")) problems.push(`diálogo arrastrable de lado (overflow-x ${s.overflowX}, touch-action ${s.touchAction})`);
   }
   // Elementos que se salen de la pantalla (o del panel, si hay un diálogo abierto).
   const dialogs = document.querySelectorAll('[role="dialog"]');

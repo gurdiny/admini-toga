@@ -53,21 +53,16 @@ async function overdueDays(allOverdue = false): Promise<number | null> {
   return overdueLookbackDays > 0 ? overdueLookbackDays : null;
 }
 
-export async function getReminders(placement: Placement, now: Date = new Date(), { allOverdue = false } = {}): Promise<ReminderItem[]> {
-  const days = await overdueDays(allOverdue);
-  const [rows, settings] = await Promise.all([
-    db.orderReminder.findMany({
-      where: placementWhere(placement, now, days),
-      orderBy: ORDER[placement],
-      take: placement === "completados" ? 100 : undefined,
-      include: {
-        client: { select: CLIENT_FIELDS },
-        completedBy: { select: { name: true } },
-        createdBy: { select: { name: true } },
-      },
-    }),
-    getSettings(),
-  ]);
+const REMINDER_INCLUDE = {
+  client: { select: CLIENT_FIELDS },
+  completedBy: { select: { name: true } },
+  createdBy: { select: { name: true } },
+} as const;
+
+type ReminderRowDb = Prisma.OrderReminderGetPayload<{ include: typeof REMINDER_INCLUDE }>;
+
+async function toItems(rows: ReminderRowDb[]): Promise<ReminderItem[]> {
+  const settings = await getSettings();
   return rows.map((r) => ({
     id: r.id,
     targetDate: dbToDay(r.targetDate),
@@ -84,6 +79,47 @@ export async function getReminders(placement: Placement, now: Date = new Date(),
     readyUrl: readyWhatsAppUrl(settings.readyMessage, r.client, settings.businessName),
     client: r.client,
   }));
+}
+
+export async function getReminders(placement: Placement, now: Date = new Date(), { allOverdue = false } = {}): Promise<ReminderItem[]> {
+  const days = await overdueDays(allOverdue);
+  const rows = await db.orderReminder.findMany({
+    where: placementWhere(placement, now, days),
+    orderBy: ORDER[placement],
+    take: placement === "completados" ? 100 : undefined,
+    include: REMINDER_INCLUDE,
+  });
+  return toItems(rows);
+}
+
+/**
+ * Buscador: por cliente (nombre, folio CLI-0005 / cli5 / 5, teléfono) o por el
+ * texto del pedido, en todas las pestañas. Pendientes primero (por fecha),
+ * luego completados (lo más reciente primero).
+ */
+export async function searchReminders(query: string): Promise<ReminderItem[]> {
+  const q = query.trim();
+  if (!q) return [];
+  const digits = q.replace(/\D/g, "");
+  const code = parseCode(q, "client");
+  const rows = await db.orderReminder.findMany({
+    where: {
+      deletedAt: null,
+      OR: [
+        { note: { contains: q, mode: "insensitive" } },
+        { client: { nameKey: { contains: toNameKey(q) } } },
+        ...(code !== null ? [{ client: { code } }] : []),
+        ...(digits.length >= 3 ? [{ client: { phone: { contains: digits } } }] : []),
+      ],
+    },
+    orderBy: [{ isCompleted: "asc" }, { targetDate: "asc" }, { targetTime: { sort: "asc", nulls: "last" } }],
+    take: 60,
+    include: REMINDER_INCLUDE,
+  });
+  // Completados: lo más reciente primero.
+  const pending = rows.filter((r) => !r.isCompleted);
+  const done = rows.filter((r) => r.isCompleted).sort((a, b) => b.targetDate.getTime() - a.targetDate.getTime());
+  return toItems([...pending, ...done]);
 }
 
 /** Contador de cada pestaña, más los atrasados que quedan fuera del límite de días. */
