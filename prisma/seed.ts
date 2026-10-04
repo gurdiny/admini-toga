@@ -116,7 +116,7 @@ async function main() {
 
   // ─── Configuración ─────────────────────────────────────────────────────
   const settings: Record<string, Prisma.InputJsonValue> = {
-    businessName: "Joyería",
+    businessName: "TOGA Plata .925",
     defaultCurrency: "MXN",
     defaultPaymentMethod: "TRANSFERENCIA",
     overdueLookbackDays: 30,

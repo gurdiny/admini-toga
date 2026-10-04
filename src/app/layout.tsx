@@ -1,29 +1,33 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+// Fuentes de la marca TOGA (las mismas que usa toga.mx).
+// Neulis Neue para texto; Neulis Sans Bold para títulos.
+const neulisNeue = localFont({
+  variable: "--font-neulis-neue",
+  display: "swap",
+  src: [
+    { path: "./fonts/NeulisNeue-Regular.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/NeulisNeue-Bold.woff2", weight: "700", style: "normal" },
+  ],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+const neulisSans = localFont({
+  variable: "--font-neulis-sans",
+  display: "swap",
+  src: [{ path: "./fonts/NeulisSans-Bold.woff2", weight: "700", style: "normal" }],
 });
 
 export const metadata: Metadata = {
-  title: "Joyería — Control interno",
-  description: "Pagos a proveedores y recordatorios de pedidos",
+  title: { default: "TOGA — Control interno", template: "%s · TOGA" },
+  description: "Pagos a proveedores y recordatorios de pedidos de TOGA Plata .925",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="es-MX"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="es-MX" className={`${neulisNeue.variable} ${neulisSans.variable} h-full antialiased`}>
+      <body className="flex min-h-full flex-col">{children}</body>
     </html>
   );
 }

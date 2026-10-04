@@ -43,6 +43,17 @@ Al cerrar una fase: marcarla aquí y hacer commit (`feat(fase-N): ...`).
 8. **Roles**: `OWNER` ve todo; `STAFF` captura pagos y recordatorios pero no ve montos totales ni `/admin`. Ocultar en UI no basta: se valida en servidor.
 9. **Seguridad de rutas**: `proxy.ts` solo redirige a `/login`; nunca es la barrera de seguridad (CVE-2025-29927). La sesión y el rol se verifican en cada layout de servidor y al inicio de cada Server Action.
 
+## Marca TOGA
+
+Tokens en `src/app/globals.css` (tomados de toga.mx), mapeados al tema de shadcn. Reglas:
+
+- **Botón principal en negro** (`primary` = `#1a1a1a`), como el logo. Nunca texto blanco sobre el verde `#90ac53` (contraste 2.6:1, ilegible).
+- **Verde** (`toga-green`) para foco, estados positivos y "liquidado"; como texto usar `text-toga-green-strong` (`#4f6b24`). Fondo suave: `bg-toga-green-soft`.
+- **Rojo** `#aa3a3e` = `destructive` (borrar, atrasados). Rosa, azul y violeta para gráficas (`chart-1..5`) y chips de categoría.
+- Fondo de página `#f5f5f5`, tarjetas blancas, radio 12px.
+- Tipografía: Neulis Neue (texto, 400/700) y Neulis Sans Bold (h1–h3), auto-hospedadas en `src/app/fonts/`. Neulis Sans no tiene peso regular publicado, por eso no se usa para texto corrido.
+- Logo: `TogaLogo` (con PLATA.925) y `TogaWordmark` (solo TOGA) en `src/components/brand/`. Favicon en `src/app/icon.png`.
+
 ## Estructura
 
 Carpetas por dominio, no por tipo de archivo:

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Gem, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
+import { TogaWordmark } from "@/components/brand/toga-logo";
 import { logout } from "@/lib/auth/actions";
 import { hasRole, requireUser } from "@/lib/auth/session";
 import { Badge } from "@/components/ui/badge";
@@ -13,11 +14,10 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
   return (
     <>
-      <header className="border-b">
+      <header className="bg-card border-b">
         <div className="mx-auto flex h-14 max-w-5xl items-center gap-4 px-4">
-          <Link href="/" className="flex items-center gap-2 font-semibold">
-            <Gem className="size-5" aria-hidden />
-            <span className="hidden sm:inline">Joyería</span>
+          <Link href="/" className="flex items-center" aria-label="Inicio">
+            <TogaWordmark priority className="h-6 w-auto" />
           </Link>
           <nav className="flex items-center gap-1 text-sm">
             <Button asChild variant="ghost" size="sm">
@@ -31,7 +31,10 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           </nav>
           <div className="ml-auto flex items-center gap-2">
             <span className="hidden text-sm sm:inline">{user.name}</span>
-            <Badge variant={isOwner ? "default" : "secondary"}>
+            <Badge
+              variant="secondary"
+              className={isOwner ? "bg-toga-green-soft text-toga-green-strong" : undefined}
+            >
               {isOwner ? "Dueño" : "Mostrador"}
             </Badge>
             <form action={logout}>
