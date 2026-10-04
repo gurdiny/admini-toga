@@ -8,6 +8,7 @@ import { formatCode } from "@/lib/codes";
 import { BusinessError } from "@/lib/errors";
 import { zId } from "@/lib/validation";
 import type { Prisma } from "@/generated/prisma/client";
+import { getSupplierDebts } from "../queries";
 import { debtSchema, idSchema } from "../schemas";
 
 const REVALIDATE = ["/proveedores", "/pagos"];
@@ -73,5 +74,20 @@ export const softDeleteDebt = defineAction(
         return tx.supplierDebt.update({ where: { id }, data: { deletedAt: new Date() } });
       },
     );
+  },
+);
+
+/**
+ * Adeudos abiertos de un proveedor para el formulario de abono.
+ * `includeId`: al editar un abono, incluye su adeudo aunque ya esté liquidado.
+ */
+export const loadDebtsForPayment = defineAction(
+  {
+    role: "STAFF",
+    schema: z.object({ supplierId: zId("El proveedor"), includeId: z.string().nullish() }),
+  },
+  async ({ supplierId, includeId }) => {
+    const debts = await getSupplierDebts(supplierId);
+    return debts.filter((debt) => !debt.isSettled || debt.id === includeId);
   },
 );

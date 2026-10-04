@@ -10,7 +10,7 @@ import { DEV_USERS } from "@/lib/dev/dev-login-shortcuts";
 export function DevToolbar({ user }: { user: CurrentUser }) {
   if (!isDevelopment()) return null;
   return (
-    <div className="bg-card/95 fixed right-3 bottom-3 z-50 flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs shadow-sm backdrop-blur">
+    <div className="bg-card/95 fixed right-3 bottom-20 z-50 md:bottom-3 flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs shadow-sm backdrop-blur">
       <span className="text-muted-foreground">Dev:</span>
       {DEV_USERS.map((devUser) =>
         devUser.email === user.email ? (

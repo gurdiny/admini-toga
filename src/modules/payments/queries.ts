@@ -190,6 +190,19 @@ export type StatementEntry = {
   paymentMethod: PaymentMethod | null;
   createdById: string;
   createdAt: Date;
+  /** Datos para editar, solo en pagos. */
+  payment: {
+    id: string;
+    date: DayKey;
+    supplierId: string;
+    categoryId: string;
+    concept: string;
+    amount: string;
+    currency: string;
+    exchangeRate: string | null;
+    paymentMethod: PaymentMethod;
+    debtId: string | null;
+  } | null;
 };
 
 /** Movimientos del proveedor en orden cronológico con saldo corrido. */
@@ -216,6 +229,7 @@ export async function getSupplierStatement(supplierId: string): Promise<Statemen
       paymentMethod: null,
       createdById: d.createdById,
       createdAt: d.createdAt,
+      payment: null,
       sortDate: d.date.getTime(),
       sortCreated: d.createdAt.getTime(),
       delta: d.amount,
@@ -232,6 +246,18 @@ export async function getSupplierStatement(supplierId: string): Promise<Statemen
       paymentMethod: p.paymentMethod,
       createdById: p.createdById,
       createdAt: p.createdAt,
+      payment: {
+        id: p.id,
+        date: dbToDay(p.date),
+        supplierId: p.supplierId,
+        categoryId: p.categoryId,
+        concept: p.concept,
+        amount: moneyToString(p.amount),
+        currency: p.currency,
+        exchangeRate: p.exchangeRate?.toString() ?? null,
+        paymentMethod: p.paymentMethod,
+        debtId: p.debtId,
+      },
       sortDate: p.date.getTime(),
       sortCreated: p.createdAt.getTime(),
       delta: p.debtId ? p.amount.neg() : ZERO,

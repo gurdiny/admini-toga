@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
 // Fuentes de la marca TOGA (las mismas que usa toga.mx).
@@ -27,7 +28,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="es-MX" className={`${neulisNeue.variable} ${neulisSans.variable} h-full antialiased`}>
-      <body className="flex min-h-full flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">
+        {children}
+        <Toaster position="top-center" richColors closeButton />
+      </body>
     </html>
   );
 }

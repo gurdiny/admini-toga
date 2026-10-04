@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { LogOut } from "lucide-react";
 import { TogaWordmark } from "@/components/brand/toga-logo";
+import { AppNav } from "@/components/app-nav";
 import { logout } from "@/lib/auth/actions";
 import { canAdminister } from "@/lib/auth/permissions";
 import { requireUser } from "@/lib/auth/session";
@@ -16,27 +17,15 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
   return (
     <>
-      <header className="bg-card border-b">
+      <header className="bg-card sticky top-0 z-40 border-b">
         <div className="mx-auto flex h-14 max-w-5xl items-center gap-4 px-4">
           <Link href="/" className="flex items-center" aria-label="Inicio">
             <TogaWordmark priority className="h-6 w-auto" />
           </Link>
-          <nav className="flex items-center gap-1 text-sm">
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/">Inicio</Link>
-            </Button>
-            {isOwner && (
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/admin">Administración</Link>
-              </Button>
-            )}
-          </nav>
+          <AppNav isOwner={isOwner} variant="top" />
           <div className="ml-auto flex items-center gap-2">
             <span className="hidden text-sm sm:inline">{user.name}</span>
-            <Badge
-              variant="secondary"
-              className={isOwner ? "bg-toga-green-soft text-toga-green-strong" : undefined}
-            >
+            <Badge variant="secondary" className={isOwner ? "bg-toga-green-soft text-toga-green-strong" : undefined}>
               {isOwner ? "Dueño" : "Mostrador"}
             </Badge>
             <form action={logout}>
@@ -47,7 +36,9 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           </div>
         </div>
       </header>
-      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col p-4">{children}</div>
+      {/* pb-24 en celular: deja espacio para la barra de navegación inferior. */}
+      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col p-4 pb-24 md:pb-8">{children}</div>
+      <AppNav isOwner={isOwner} variant="bottom" />
       <DevToolbar user={user} />
     </>
   );
