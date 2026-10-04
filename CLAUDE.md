@@ -18,7 +18,9 @@ El plan completo por fases está en [docs/PLAN.md](docs/PLAN.md). **Trabaja una 
 - [ ] Fase 7 — Reportes, exportación y búsqueda
 - [ ] Fase 8 — Deploy, respaldos y operación
 
-Al cerrar una fase: marcarla aquí y hacer commit (`feat(fase-N): ...`).
+Al cerrar una fase: marcarla aquí, hacer commit (`feat(fase-N): ...`) y entregar al usuario **dos listas de pruebas**:
+1. Las que hizo Claude (pruebas automatizadas, curl, scripts) con su resultado.
+2. Las que debe hacer el usuario a mano: checklist numerado con usuario, pasos y lo que debe verse (incluir celular cuando aplique).
 
 ## Stack
 
@@ -119,6 +121,7 @@ Variables: [.env.example](.env.example) documenta todas. Se usa el puerto 5433 p
 - **Auditoría**: toda escritura pasa por `withAudit()` de `src/lib/audit.ts`, que corre la escritura y el `AuditLog` en una sola transacción. Para UPDATE/DELETE pasar `before` para obtener el diff.
 - **Validación**: piezas compartidas en `src/lib/validation.ts` (`zText`, `zMoney` → string "1250.50", `zDay` → Date, `zOptionalPhone`, `zOptionalFolio`, `zCheckbox`…). Esquemas por módulo en `src/modules/*/schemas.ts`; sirven igual para el formulario (cliente) y la acción (servidor). En Zod 4, un campo opcional se marca con `.optional()`/`.nullish()`; un `union` con `z.undefined()` NO lo hace opcional.
 - **Dinero**: `src/lib/money.ts` (`parseMoney`, `toDecimal`, `sumDecimals`, `formatMXN`, `moneyToString`). Funciona en cliente y servidor. Un `Decimal` no cruza a Client Components: convertir con `moneyToString()`.
+- **Login automático en desarrollo**: con `DEV_AUTO_LOGIN="correo"` en `.env`, `npm run dev` entra solo con ese usuario del seed (pasa por el login real de Better Auth vía `/api/dev/login`). La barra "Dev:" abajo a la derecha cambia de usuario en un clic; `/login?salir=1` muestra el formulario real. Todo está en `src/lib/dev/` y se apaga solo en producción (`NODE_ENV !== "development"`: la ruta da 404 y el proxy manda a `/login`).
 - Scripts sueltos que importan módulos con `server-only`: `npx tsx --conditions=react-server archivo.ts`.
 - shadcn/ui: estilo `radix-nova`, componentes con `npx shadcn@latest add <componente>`.
 - Para exportar a Excel usar `exceljs`: el paquete `xlsx` publicado en npm está desactualizado y con vulnerabilidades conocidas.

@@ -51,5 +51,6 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
 
 export async function logout() {
   await auth.api.signOut({ headers: await headers() });
-  redirect("/login");
+  // ?salir evita que el login automático de desarrollo vuelva a entrar solo.
+  redirect("/login?salir=1");
 }

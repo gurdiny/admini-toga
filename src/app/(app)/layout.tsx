@@ -5,6 +5,7 @@ import { logout } from "@/lib/auth/actions";
 import { hasRole, requireUser } from "@/lib/auth/session";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DevToolbar } from "@/lib/dev/dev-toolbar";
 
 // Todo lo que está bajo (app) exige sesión. Esta es la verificación real;
 // el proxy solo redirige por comodidad.
@@ -46,6 +47,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         </div>
       </header>
       <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col p-4">{children}</div>
+      <DevToolbar user={user} />
     </>
   );
 }

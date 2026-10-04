@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
+import { devAutoLoginEmail, devLoginUrl } from "@/lib/dev/auto-login";
 
 // Solo es una comodidad: manda a /login a quien no trae cookie de sesión.
 // NO es la barrera de seguridad (la cookie podría ser inválida o falsificada,
@@ -7,8 +8,12 @@ import { getSessionCookie } from "better-auth/cookies";
 // requireUser()/requireRole() de cada layout y Server Action.
 export function proxy(request: NextRequest) {
   if (!getSessionCookie(request)) {
-    const url = new URL("/login", request.url);
     const next = request.nextUrl.pathname + request.nextUrl.search;
+    // Solo en `npm run dev` con DEV_AUTO_LOGIN en .env.
+    if (devAutoLoginEmail()) {
+      return NextResponse.redirect(new URL(devLoginUrl(next), request.url));
+    }
+    const url = new URL("/login", request.url);
     if (next !== "/") url.searchParams.set("next", next);
     return NextResponse.redirect(url);
   }
@@ -18,6 +23,6 @@ export function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     // Todo excepto login, la API de auth, archivos estáticos e imágenes.
-    "/((?!login|api/auth|api/health|_next/static|_next/image|favicon\\.ico|.*\\.(?:png|jpg|jpeg|svg|webp|ico)$).*)",
+    "/((?!login|api/auth|api/dev|api/health|_next/static|_next/image|favicon\\.ico|.*\\.(?:png|jpg|jpeg|svg|webp|ico)$).*)",
   ],
 };
