@@ -1,0 +1,6 @@
+# Normaliza finales de línea a LF (WSL + Windows)
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary

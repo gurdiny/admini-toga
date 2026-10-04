@@ -1,0 +1,47 @@
+# dependencias
+node_modules/
+.pnp
+.pnp.*
+
+# Next.js / build
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# variables de entorno (solo se versiona .env.example)
+.env
+.env*.local
+.env.production
+!.env.example
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal
+src/generated/
+
+# respaldos de la base (contienen datos reales)
+backups/
+*.backup.json
+
+# pruebas
+coverage/
+
+# Vercel
+.vercel
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# sistema / editor
+.DS_Store
+Thumbs.db
+*.pem
+.idea/
+
+# Claude Code: settings personales
+.claude/settings.local.json
