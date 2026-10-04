@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Check, ChevronsUpDown, Plus } from "lucide-react";
+import { Check } from "lucide-react";
+import { EntityPicker } from "@/components/form/entity-picker";
 import { Field, FormError } from "@/components/form/field";
 import { DayInput } from "@/components/form/day-input";
 import { MoneyInput } from "@/components/form/money-input";
 import { Button } from "@/components/ui/button";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import {
   Dialog,
   DialogContent,
@@ -17,12 +17,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAction } from "@/hooks/use-action";
-import { formatCode } from "@/lib/codes";
+import { formatCode, parseCode } from "@/lib/codes";
 import { formatDay, getToday } from "@/lib/date";
 import { formatMoney, toDecimal } from "@/lib/money";
+import { toNameKey } from "@/lib/normalize";
 import { cn } from "@/lib/utils";
 import { CURRENCIES } from "@/lib/validation";
 import type { PaymentMethod } from "@/generated/prisma/browser";
@@ -378,7 +378,7 @@ function DebtOption({ checked, onSelect, title, detail }: { checked: boolean; on
 
 type PickerSupplier = { id: string; code: number; name: string };
 
-/** Buscador de proveedores con alta en línea si no existe. */
+/** Buscador de proveedores (en la lista ya cargada) con alta en línea si no existe. */
 function SupplierPicker({
   suppliers,
   value,
@@ -394,71 +394,32 @@ function SupplierPicker({
   onChange: (id: string) => void;
   onCreated: (supplier: PickerSupplier) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
+  const toItem = (s: PickerSupplier) => ({ id: s.id, title: s.name, detail: formatCode("supplier", s.code) });
   const selected = suppliers.find((s) => s.id === value);
+  const key = toNameKey(search);
+  const code = parseCode(search, "supplier");
+  const matches = search.trim() ? suppliers.filter((s) => toNameKey(s.name).includes(key) || s.code === code) : suppliers;
 
   return (
     <>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            id="p-supplier"
-            type="button"
-            variant="outline"
-            role="combobox"
-            aria-expanded={open}
-            disabled={disabled}
-            className="h-11 w-full justify-between font-normal"
-          >
-            {selected ? (
-              <span className="truncate">
-                {selected.name} <span className="text-muted-foreground">· {formatCode("supplier", selected.code)}</span>
-              </span>
-            ) : (
-              <span className="text-muted-foreground">Busca o elige un proveedor</span>
-            )}
-            <ChevronsUpDown className="opacity-50" aria-hidden />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-(--radix-popover-trigger-width) p-0" align="start">
-          <Command>
-            <CommandInput placeholder="Nombre o código…" value={search} onValueChange={setSearch} />
-            <CommandList>
-              <CommandEmpty>No hay proveedores con «{search}».</CommandEmpty>
-              <CommandGroup>
-                {suppliers.map((s) => (
-                  <CommandItem
-                    key={s.id}
-                    value={`${s.name} ${formatCode("supplier", s.code)}`}
-                    onSelect={() => {
-                      onChange(s.id);
-                      setOpen(false);
-                    }}
-                  >
-                    <Check className={cn(s.id === value ? "opacity-100" : "opacity-0")} aria-hidden />
-                    {s.name}
-                    <span className="text-muted-foreground ml-auto text-xs">{formatCode("supplier", s.code)}</span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-              <CommandGroup>
-                <CommandItem
-                  value={`__nuevo__ ${search}`}
-                  onSelect={() => {
-                    setOpen(false);
-                    setCreating(true);
-                  }}
-                >
-                  <Plus aria-hidden />
-                  {search.trim() ? `Dar de alta «${search.trim()}»` : "Nuevo proveedor"}
-                </CommandItem>
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
+      <EntityPicker
+        id="p-supplier"
+        selected={selected ? toItem(selected) : null}
+        onClear={disabled ? undefined : () => onChange("")}
+        query={search}
+        onQueryChange={setSearch}
+        placeholder="Nombre o código (PROV-0001)"
+        items={matches.map(toItem)}
+        onPick={(id) => {
+          setSearch("");
+          onChange(id);
+        }}
+        emptyText={(q) => `Ningún proveedor coincide con «${q}».`}
+        createLabel={(q) => (q ? `Proveedor nuevo «${q}»` : "Proveedor nuevo")}
+        onCreate={() => setCreating(true)}
+      />
       <SupplierFormDialog
         open={creating}
         onOpenChange={setCreating}

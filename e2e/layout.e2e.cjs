@@ -20,6 +20,8 @@ const DIALOGS = [
   ["detalle", "/recordatorios?vista=completados", (p) => p.getByRole("button", { name: "Ver detalle" }).first().click()],
   ["registrar-pago", "/pagos", (p) => p.getByRole("button", { name: "Registrar pago" }).locator("visible=true").first().click()],
   ["nuevo-proveedor", "/proveedores", (p) => p.getByRole("button", { name: "Nuevo proveedor" }).locator("visible=true").first().click()],
+  // Solo en celular: el menú de la barra inferior.
+  ["menu", "/", (p) => p.getByRole("button", { name: "Menú" }).click(), { mobileOnly: true }],
 ];
 
 /** Problemas de diseño en lo que se ve ahora mismo. */
@@ -85,7 +87,8 @@ function audit(mobile) {
         log(problems.length === 0, `${width}px ${label}${problems.length ? ": " + problems.join("; ") : ""}`);
         await page.screenshot({ path: shots(`layout-${width}-${label}.png`), fullPage: true });
       }
-      for (const [label, path, open] of DIALOGS) {
+      for (const [label, path, open, { mobileOnly } = {}] of DIALOGS) {
+        if (mobileOnly && !mobile) continue;
         await page.goto(`${B}${path}`);
         await page.waitForLoadState("networkidle");
         await open(page);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Search, UserPlus, X } from "lucide-react";
+import { EntityPicker, type PickerItem } from "@/components/form/entity-picker";
 import { Field, FormError } from "@/components/form/field";
 import { DayInput } from "@/components/form/day-input";
 import { formatPhone } from "@/components/phone-link";
@@ -151,23 +151,13 @@ function ReminderForm({ reminder, onDone }: { reminder?: ReminderFormValues; onD
           </fieldset>
         ) : (
           <Field label="Cliente" htmlFor="r-client" required error={clientError}>
-            {client ? (
-              <div className="bg-toga-green-soft flex min-h-14 items-center gap-3 rounded-2xl px-4 py-2">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-bold">{client.name}</p>
-                  <ClientDetail client={client} />
-                </div>
-                <Button type="button" variant="ghost" size="sm" onClick={() => setClient(null)} aria-label="Cambiar de cliente">
-                  <X aria-hidden /> Cambiar
-                </Button>
-              </div>
-            ) : (
-              <ClientSearch
-                onPick={setClient}
-                onCreate={(search) => setNewClient(guessNewClient(search))}
-                invalid={!!clientError}
-              />
-            )}
+            <ClientPicker
+              client={client}
+              onPick={setClient}
+              onClear={() => setClient(null)}
+              onCreate={(search) => setNewClient(guessNewClient(search))}
+              invalid={!!clientError}
+            />
           </Field>
         )}
 
@@ -235,18 +225,23 @@ function ReminderForm({ reminder, onDone }: { reminder?: ReminderFormValues; onD
   );
 }
 
-function ClientDetail({ client }: { client: ClientOption }) {
-  const parts = [formatCode("client", client.code), client.phone && formatPhone(client.phone)].filter(Boolean);
-  return <p className="text-muted-foreground truncate text-sm">{parts.join(" · ")}</p>;
-}
+const toItem = (client: ClientOption): PickerItem => ({
+  id: client.id,
+  title: client.name,
+  detail: [formatCode("client", client.code), client.phone && formatPhone(client.phone)].filter(Boolean).join(" · "),
+});
 
-/** Busca en el servidor mientras se escribe; si no está, ofrece darlo de alta. */
-function ClientSearch({
+/** Busca clientes en el servidor mientras se escribe; si no está, ofrece darlo de alta. */
+function ClientPicker({
+  client,
   onPick,
+  onClear,
   onCreate,
   invalid,
 }: {
+  client: ClientOption | null;
   onPick: (client: ClientOption) => void;
+  onClear: () => void;
   onCreate: (search: string) => void;
   invalid: boolean;
 }) {
@@ -255,6 +250,7 @@ function ClientSearch({
   const [loading, startLoading] = useTransition();
 
   useEffect(() => {
+    if (client) return;
     let cancelled = false;
     const timer = setTimeout(
       () =>
@@ -268,56 +264,27 @@ function ClientSearch({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [search]);
+  }, [search, client]);
 
-  const text = search.trim();
   return (
-    <div className="space-y-2">
-      <div className="relative">
-        <Search className="text-muted-foreground absolute top-1/2 left-4 size-4 -translate-y-1/2" aria-hidden />
-        <Input
-          id="r-client"
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Nombre, folio o teléfono"
-          autoComplete="off"
-          enterKeyHint="search"
-          className="h-11 rounded-full pl-10"
-          aria-invalid={invalid}
-          aria-controls="r-client-results"
-        />
-      </div>
-      <ul id="r-client-results" className="divide-y overflow-hidden rounded-2xl border" aria-busy={loading}>
-        {results === null ? (
-          <li className="text-muted-foreground px-4 py-3 text-sm">Buscando…</li>
-        ) : (
-          <>
-            {!text && results.length > 0 && <li className="text-muted-foreground px-4 pt-2 pb-1 text-xs">Recientes</li>}
-            {results.map((c) => (
-              <li key={c.id}>
-                <button type="button" onClick={() => onPick(c)} className="hover:bg-muted flex min-h-12 w-full flex-col justify-center px-4 py-2 text-left">
-                  <span className="font-bold">{c.name}</span>
-                  <ClientDetail client={c} />
-                </button>
-              </li>
-            ))}
-            {text && results.length === 0 && !loading && (
-              <li className="text-muted-foreground px-4 py-3 text-sm">Ningún cliente coincide con «{text}».</li>
-            )}
-          </>
-        )}
-        <li>
-          <button
-            type="button"
-            onClick={() => onCreate(search)}
-            className="text-toga-pink-strong hover:bg-toga-pink-soft flex min-h-12 w-full items-center gap-2 px-4 text-left font-bold"
-          >
-            <UserPlus className="size-4" aria-hidden />
-            {text ? `Cliente nuevo «${text}»` : "Cliente nuevo"}
-          </button>
-        </li>
-      </ul>
-    </div>
+    <EntityPicker
+      id="r-client"
+      selected={client ? toItem(client) : null}
+      onClear={onClear}
+      query={search}
+      onQueryChange={setSearch}
+      placeholder="Nombre, folio o teléfono"
+      items={results?.map(toItem) ?? null}
+      onPick={(id) => {
+        const picked = results?.find((c) => c.id === id);
+        if (picked) onPick(picked);
+      }}
+      idleLabel="Recientes"
+      emptyText={(q) => `Ningún cliente coincide con «${q}».`}
+      createLabel={(q) => (q ? `Cliente nuevo «${q}»` : "Cliente nuevo")}
+      onCreate={onCreate}
+      loading={loading}
+      invalid={invalid}
+    />
   );
 }

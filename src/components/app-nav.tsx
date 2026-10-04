@@ -121,16 +121,16 @@ export function BottomNav({ isOwner, reminders, userName, options, defaultMethod
             <DialogTitle>{userName}</DialogTitle>
             <DialogDescription>{isOwner ? "Dueño" : "Mostrador"}</DialogDescription>
           </DialogHeader>
-          <ul className="divide-y rounded-xl border">
+          <ul className="divide-y rounded-2xl border">
             {[...MAIN_LINKS, ...(isOwner ? [ADMIN_LINK] : [])].map(({ href, label, icon: Icon }) => (
               <li key={href}>
                 <Link
                   href={href}
                   onClick={() => setMenuOpen(false)}
                   aria-current={isActive(pathname, href) ? "page" : undefined}
-                  className={cn("flex min-h-14 items-center gap-3 px-4 text-base", isActive(pathname, href) && "font-bold")}
+                  className={cn("flex min-h-12 items-center gap-3 px-4 text-sm", isActive(pathname, href) && "font-bold")}
                 >
-                  <Icon className="text-muted-foreground size-5" aria-hidden />
+                  <Icon className={cn("text-muted-foreground size-[18px]", isActive(pathname, href) && "text-toga-pink-strong")} aria-hidden />
                   {label}
                   {href === REMINDERS.href && <CountBadge badge={reminders} className="ml-auto" />}
                 </Link>
@@ -139,7 +139,7 @@ export function BottomNav({ isOwner, reminders, userName, options, defaultMethod
           </ul>
           {devEmail && <DevUserSwitch email={devEmail} />}
           <form action={logout}>
-            <Button type="submit" variant="outline" size="lg" className="w-full">
+            <Button type="submit" variant="outline" className="h-11 w-full">
               <LogOut aria-hidden />
               Cerrar sesión
             </Button>
