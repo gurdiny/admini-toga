@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CalendarCheck, CalendarClock, CircleCheckBig, PartyPopper, Search, SearchX } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
+import { ExportMenu } from "@/components/export-menu";
 import { PageHeader } from "@/components/page-header";
 import { Input } from "@/components/ui/input";
 import { canDelete, canEdit } from "@/lib/auth/permissions";
@@ -64,6 +65,8 @@ export default async function RemindersPage({ searchParams }: PageProps<"/record
   const dayTitle =
     bucket === "manana" ? formatDay(getTomorrow(now), "EEEE d 'de' MMMM") : bucket === "hoy" ? formatDay(getToday(now), "EEEE d 'de' MMMM") : null;
   const empty = EMPTY[bucket];
+  const exportParams = new URLSearchParams({ ...(bucket !== "manana" && { vista: bucket }), ...(allOverdue && { todos: "1" }) }).toString();
+  const exportHref = `/api/exportar/recordatorios${exportParams ? `?${exportParams}` : ""}`;
 
   return (
     <>
@@ -124,9 +127,14 @@ export default async function RemindersPage({ searchParams }: PageProps<"/record
                 ? `Nada coincide con «${q}»`
                 : `${found.length}${found.length === 60 ? "+" : ""} resultado${found.length === 1 ? "" : "s"} para «${q}»`}
             </h2>
-            <Link href={bucketHref(bucket)} className="text-toga-pink-strong inline-flex min-h-10 items-center text-sm font-bold">
-              Quitar búsqueda
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link href={bucketHref(bucket)} className="text-toga-pink-strong inline-flex min-h-10 items-center text-sm font-bold">
+                Quitar búsqueda
+              </Link>
+              {found.length > 0 && (
+                <ExportMenu href={`/api/exportar/recordatorios?q=${encodeURIComponent(q)}`} description={`Todos los pedidos que coinciden con «${q}».`} />
+              )}
+            </div>
           </div>
           {found.length === 0 ? (
             <EmptyState icon={SearchX} title={`Ningún pedido coincide con «${q}»`} description="Prueba con el folio (CLI-0005), el teléfono o una palabra del pedido." />
@@ -136,9 +144,21 @@ export default async function RemindersPage({ searchParams }: PageProps<"/record
         </section>
       ) : (
         <section aria-labelledby="lista" className="space-y-3">
-          <h2 id="lista" className="text-muted-foreground text-sm first-letter:uppercase">
-            {dayTitle ?? (bucket === "completados" ? `Últimos ${COMPLETED_WINDOW_DAYS} días` : "Pendientes de días anteriores")}
-          </h2>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 id="lista" className="text-muted-foreground text-sm first-letter:uppercase">
+              {dayTitle ?? (bucket === "completados" ? `Últimos ${COMPLETED_WINDOW_DAYS} días` : "Pendientes de días anteriores")}
+            </h2>
+            {(items.length > 0 || (later?.length ?? 0) > 0) && (
+              <ExportMenu
+                href={exportHref}
+                description={
+                  bucket === "manana"
+                    ? "Lo de mañana y lo de más adelante."
+                    : `Todo lo de «${BUCKET_LABELS[bucket]}»${allOverdue ? ", sin límite de días" : ""}.`
+                }
+              />
+            )}
+          </div>
           {items.length === 0 ? (
             <EmptyState icon={empty.icon} title={empty.title} description={empty.description} />
           ) : (

@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "@/lib/db";
-import { dbToDay, dayRangeWhere, formatForDisplay, type DayKey, type DayRange } from "@/lib/date";
-import { moneyToString, toDecimal, ZERO, type Decimal } from "@/lib/money";
+import { dbToDay, dayRangeWhere, formatDay, formatForDisplay, type DayKey, type DayRange } from "@/lib/date";
+import { moneyToString, toDecimal, toMXN, ZERO, type Decimal } from "@/lib/money";
 import { toNameKey } from "@/lib/normalize";
 import { parseCode } from "@/lib/codes";
 import { getSettings } from "@/lib/settings";
@@ -206,6 +206,7 @@ export type StatementEntry = {
     exchangeRate: string | null;
     paymentMethod: PaymentMethod;
     debtId: string | null;
+    order: PaymentOrderRef | null;
   } | null;
 };
 
@@ -215,7 +216,7 @@ export async function getSupplierStatement(supplierId: string): Promise<Statemen
     db.supplierDebt.findMany({ where: { supplierId, deletedAt: null } }),
     db.supplierPayment.findMany({
       where: { supplierId, deletedAt: null },
-      include: { debt: { select: { code: true } }, createdBy: { select: { name: true } }, category: { select: { name: true } } },
+      include: { debt: { select: { code: true } }, createdBy: { select: { name: true } }, category: { select: { name: true } }, order: ORDER_SELECT },
     }),
   ]);
   const traces = await paymentTraces(payments);
@@ -266,6 +267,7 @@ export async function getSupplierStatement(supplierId: string): Promise<Statemen
         exchangeRate: p.exchangeRate?.toString() ?? null,
         paymentMethod: p.paymentMethod,
         debtId: p.debtId,
+        order: toOrderRef(p.order),
       },
       sortDate: p.date.getTime(),
       sortCreated: p.createdAt.getTime(),
@@ -286,6 +288,17 @@ export async function getSupplierStatement(supplierId: string): Promise<Statemen
     addTo(running, entry.currency, delta);
     return { ...entry, balanceAfter: moneyToString(running.get(entry.currency) ?? ZERO) };
   });
+}
+
+// ─── Pedido de cliente ligado a un pago ───────────────────────────────────
+
+/** Pedido (recordatorio) al que corresponde un pago: «Ana López · 12 oct». */
+export type PaymentOrderRef = { id: string; clientId: string; label: string };
+
+const ORDER_SELECT = { select: { id: true, targetDate: true, client: { select: { id: true, name: true } } } } as const;
+
+function toOrderRef(order: { id: string; targetDate: Date; client: { id: string; name: string } } | null): PaymentOrderRef | null {
+  return order ? { id: order.id, clientId: order.client.id, label: `${order.client.name} · ${formatDay(dbToDay(order.targetDate), "d MMM yyyy")}` } : null;
 }
 
 // ─── Traza: quién y cuándo ─────────────────────────────────────────────────
@@ -361,6 +374,7 @@ export type PaymentListItem = {
   categoryColor: string;
   debtId: string | null;
   debtCode: number | null;
+  order: PaymentOrderRef | null;
   createdById: string;
   createdByName: string;
   createdAt: Date;
@@ -386,15 +400,18 @@ function paymentWhere(filters: PaymentFilters): Prisma.SupplierPaymentWhereInput
   return where;
 }
 
+function paymentOrder(filters: PaymentFilters): Prisma.SupplierPaymentOrderByWithRelationInput[] {
+  const dir = filters.dir ?? "desc";
+  return filters.sort === "amount"
+    ? [{ amount: dir }, { code: "desc" }]
+    : filters.sort === "supplier"
+      ? [{ supplier: { nameKey: dir } }, { date: "desc" }, { code: "desc" }]
+      : [{ date: dir }, { code: dir }];
+}
+
 export async function getPayments(filters: PaymentFilters): Promise<{ items: PaymentListItem[]; total: number }> {
   const where = paymentWhere(filters);
-  const dir = filters.dir ?? "desc";
-  const orderBy: Prisma.SupplierPaymentOrderByWithRelationInput[] =
-    filters.sort === "amount"
-      ? [{ amount: dir }, { code: "desc" }]
-      : filters.sort === "supplier"
-        ? [{ supplier: { nameKey: dir } }, { date: "desc" }, { code: "desc" }]
-        : [{ date: dir }, { code: dir }];
+  const orderBy = paymentOrder(filters);
   const page = Math.max(1, filters.page ?? 1);
 
   const [rows, total] = await Promise.all([
@@ -408,6 +425,7 @@ export async function getPayments(filters: PaymentFilters): Promise<{ items: Pay
         category: { select: { name: true, color: true } },
         debt: { select: { code: true } },
         createdBy: { select: { name: true } },
+        order: ORDER_SELECT,
       },
     }),
     db.supplierPayment.count({ where }),
@@ -432,12 +450,71 @@ export async function getPayments(filters: PaymentFilters): Promise<{ items: Pay
       categoryColor: p.category.color,
       debtId: p.debtId,
       debtCode: p.debt?.code ?? null,
+      order: toOrderRef(p.order),
       createdById: p.createdById,
       createdByName: p.createdBy.name,
       createdAt: p.createdAt,
       trace: traces.get(p.id)!,
     })),
   };
+}
+
+/** Tope de filas al exportar: un año de pagos de la joyería cabe de sobra. */
+export const EXPORT_LIMIT = 20_000;
+
+export type PaymentExportRow = {
+  code: number;
+  date: DayKey;
+  supplierCode: number;
+  supplierName: string;
+  concept: string;
+  categoryName: string;
+  paymentMethod: PaymentMethod;
+  debtCode: number | null;
+  currency: string;
+  amount: string;
+  exchangeRate: string | null;
+  /** En pesos: amount × tipo de cambio (igual que los totales de la pantalla). */
+  amountMXN: string;
+  clientName: string | null;
+  clientCode: number | null;
+  createdByName: string;
+  /** "04/10/2026 13:03" en hora de México. */
+  createdAt: string;
+};
+
+/** Todos los pagos de los filtros de /pagos (sin paginar), en el mismo orden. */
+export async function getPaymentsForExport(filters: Omit<PaymentFilters, "page">): Promise<PaymentExportRow[]> {
+  const rows = await db.supplierPayment.findMany({
+    where: paymentWhere(filters),
+    orderBy: paymentOrder(filters),
+    take: EXPORT_LIMIT,
+    include: {
+      supplier: { select: { code: true, name: true } },
+      category: { select: { name: true } },
+      debt: { select: { code: true } },
+      createdBy: { select: { name: true } },
+      order: { select: { client: { select: { code: true, name: true } } } },
+    },
+  });
+  return rows.map((p) => ({
+    code: p.code,
+    date: dbToDay(p.date),
+    supplierCode: p.supplier.code,
+    supplierName: p.supplier.name,
+    concept: p.concept,
+    categoryName: p.category.name,
+    paymentMethod: p.paymentMethod,
+    debtCode: p.debt?.code ?? null,
+    currency: p.currency,
+    amount: moneyToString(p.amount),
+    exchangeRate: p.exchangeRate?.toString() ?? null,
+    amountMXN: moneyToString(toMXN(p)),
+    clientName: p.order?.client.name ?? null,
+    clientCode: p.order?.client.code ?? null,
+    createdByName: p.createdBy.name,
+    createdAt: formatForDisplay(p.createdAt, "dd/MM/yyyy HH:mm"),
+  }));
 }
 
 export type BreakdownRow = { id: string; name: string; color?: string; total: string; count: number };
@@ -473,7 +550,7 @@ export async function getPaymentsSummary(range: DayRange): Promise<PaymentsSumma
   const bySupplier = new Map<string, BreakdownRow & { sum: Decimal }>();
   const byCategory = new Map<string, BreakdownRow & { sum: Decimal }>();
   for (const p of payments) {
-    const mxn = p.currency === "MXN" ? p.amount : p.amount.mul(p.exchangeRate ?? toDecimal(1));
+    const mxn = toMXN(p);
     total = total.add(mxn);
     for (const [map, item] of [
       [bySupplier, p.supplier],

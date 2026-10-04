@@ -2,7 +2,7 @@ import "server-only";
 import { formatCode, parseCode } from "@/lib/codes";
 import { db } from "@/lib/db";
 import { dbToDay, endOfDayInTZ, formatDay, formatForDisplay, startOfDayInTZ, type DayKey } from "@/lib/date";
-import { formatMoney, moneyToString, toDecimal, ZERO, type Decimal } from "@/lib/money";
+import { formatMoney, moneyToString, toMXN, ZERO, type Decimal } from "@/lib/money";
 import { toNameKey } from "@/lib/normalize";
 import type { CategoryType, Prisma } from "@/generated/prisma/client";
 import { describeChanges, referencedIds, SETTING_LABELS, type ChangeLine, type Lookup } from "./audit-format";
@@ -57,7 +57,7 @@ async function paidByClient(clientIds: string[]): Promise<Map<string, Decimal>> 
   });
   const totals = new Map<string, Decimal>();
   for (const p of payments) {
-    const mxn = p.currency === "MXN" ? p.amount : p.amount.mul(p.exchangeRate ?? toDecimal(1));
+    const mxn = toMXN(p);
     const id = p.order!.clientId;
     totals.set(id, (totals.get(id) ?? ZERO).add(mxn));
   }
@@ -96,60 +96,6 @@ export async function listClients(query = ""): Promise<ClientRow[]> {
       totalPaid: moneyToString(paid.get(c.id) ?? ZERO),
     };
   });
-}
-
-export type ClientDetail = {
-  id: string;
-  code: number;
-  name: string;
-  phone: string | null;
-  notes: string | null;
-  createdAt: string;
-  totalPaid: string;
-  orders: {
-    id: string;
-    targetDate: DayKey;
-    targetTime: string | null;
-    note: string;
-    priority: "NORMAL" | "ALTA";
-    isCompleted: boolean;
-    completedAt: string | null;
-    createdByName: string;
-  }[];
-};
-
-export async function getClientDetail(id: string): Promise<ClientDetail | null> {
-  const client = await db.client.findFirst({
-    where: { id, deletedAt: null },
-    include: {
-      reminders: {
-        where: { deletedAt: null },
-        orderBy: [{ targetDate: "desc" }, { createdAt: "desc" }],
-        include: { createdBy: { select: { name: true } } },
-      },
-    },
-  });
-  if (!client) return null;
-  const paid = await paidByClient([client.id]);
-  return {
-    id: client.id,
-    code: client.code,
-    name: client.name,
-    phone: client.phone,
-    notes: client.notes,
-    createdAt: formatForDisplay(client.createdAt, "d MMM yyyy"),
-    totalPaid: moneyToString(paid.get(client.id) ?? ZERO),
-    orders: client.reminders.map((r) => ({
-      id: r.id,
-      targetDate: dbToDay(r.targetDate),
-      targetTime: r.targetTime,
-      note: r.note,
-      priority: r.priority,
-      isCompleted: r.isCompleted,
-      completedAt: r.completedAt ? formatForDisplay(r.completedAt, "d MMM yyyy") : null,
-      createdByName: r.createdBy.name,
-    })),
-  };
 }
 
 // ─── Usuarios ──────────────────────────────────────────────────────────────

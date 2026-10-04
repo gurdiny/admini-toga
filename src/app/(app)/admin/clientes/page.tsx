@@ -18,7 +18,7 @@ const columns: AdminColumn<ClientRow>[] = [
     header: "Cliente",
     mobile: "title",
     cell: (c) => (
-      <Link href={`/admin/clientes/${c.id}`} className="-my-2 block py-2 hover:underline">
+      <Link href={`/clientes/${c.id}`} className="-my-2 block py-2 hover:underline">
         {c.name}
       </Link>
     ),
@@ -66,7 +66,7 @@ export default async function ClientsPage({ searchParams }: PageProps<"/admin/cl
         columns={columns}
         actions={(c) => (
           <Button asChild variant="ghost" size="icon" aria-label={`Ver ${c.name}`}>
-            <Link href={`/admin/clientes/${c.id}`}>
+            <Link href={`/clientes/${c.id}`}>
               <ChevronRight aria-hidden />
             </Link>
           </Button>

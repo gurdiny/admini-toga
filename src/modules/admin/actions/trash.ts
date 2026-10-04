@@ -6,7 +6,7 @@ import { formatCode } from "@/lib/codes";
 import { BusinessError } from "@/lib/errors";
 import { restoreSchema } from "../schemas";
 
-const REVALIDATE = ["/admin/papelera", "/pagos", "/proveedores", "/recordatorios"];
+const REVALIDATE = ["/admin/papelera", "/pagos", "/proveedores", "/recordatorios", "/clientes"];
 const GONE = "Ya no está en la papelera. Recarga la página.";
 
 /**

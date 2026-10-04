@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Check } from "lucide-react";
+import { Check, ClipboardList, X } from "lucide-react";
 import { EntityPicker } from "@/components/form/entity-picker";
 import { Field, FormError } from "@/components/form/field";
 import { DayInput } from "@/components/form/day-input";
@@ -29,7 +29,7 @@ import type { PaymentMethod } from "@/generated/prisma/browser";
 import { loadDebtsForPayment } from "../actions/debts";
 import { createPayment, updatePayment } from "../actions/payments";
 import { PAYMENT_METHOD_LABELS } from "../labels";
-import type { CaptureOptions, DebtSummary } from "../queries";
+import type { CaptureOptions, DebtSummary, PaymentOrderRef } from "../queries";
 import { SupplierFormDialog } from "./supplier-form-dialog";
 
 const CONTADO = "contado";
@@ -45,6 +45,8 @@ export type PaymentFormValues = {
   exchangeRate: string | null;
   paymentMethod: PaymentMethod;
   debtId: string | null;
+  /** Pedido de cliente al que corresponde; se conserva al editar. */
+  order: PaymentOrderRef | null;
 };
 
 type Props = {
@@ -52,8 +54,11 @@ type Props = {
   defaultMethod: PaymentMethod;
   /** Con `payment` edita; sin él, registra uno nuevo. */
   payment?: PaymentFormValues;
-  /** Proveedor y adeudo preseleccionados (botón «Abonar» de un adeudo). */
-  preset?: { supplierId: string; debtId?: string };
+  /**
+   * Preseleccionados: proveedor y adeudo (botón «Abonar»), o el pedido del
+   * cliente («Registrar pago de este pedido» en /clientes/[id]).
+   */
+  preset?: { supplierId?: string; debtId?: string; order?: PaymentOrderRef };
   title?: string;
   trigger?: React.ReactNode;
   open?: boolean;
@@ -107,6 +112,7 @@ function PaymentForm({
     date: payment?.date ?? getToday(),
   });
   const [values, setValues] = useState<Values>(initial);
+  const [order, setOrder] = useState<PaymentOrderRef | null>(payment ? payment.order : (preset?.order ?? null));
   const [showCurrency, setShowCurrency] = useState(() => (payment?.currency ?? options.defaults.currency) !== "MXN");
   const set = <K extends keyof Values>(key: K, value: Values[K]) => setValues((v) => ({ ...v, [key]: value }));
 
@@ -188,6 +194,7 @@ function PaymentForm({
       exchangeRate: values.currency === "MXN" ? null : values.exchangeRate,
       paymentMethod: values.paymentMethod,
       debtId: values.debtId && values.debtId !== CONTADO ? values.debtId : null,
+      orderId: order?.id ?? null,
     };
     if (payment) update.run({ ...input, id: payment.id });
     else create.run(input);
@@ -202,6 +209,19 @@ function PaymentForm({
 
         <form id="payment-form" onSubmit={submit} className="space-y-4">
           <FormError message={action.error && !Object.keys(errors).length ? action.error : null} />
+
+          {order && (
+            <div className="bg-toga-green-soft flex min-h-14 items-center gap-3 rounded-2xl py-2 pr-1 pl-4">
+              <ClipboardList className="text-toga-green-strong size-5 shrink-0" aria-hidden />
+              <div className="min-w-0 flex-1">
+                <p className="text-muted-foreground text-xs">Pedido del cliente</p>
+                <p className="truncate font-bold">{order.label}</p>
+              </div>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setOrder(null)} aria-label={`Quitar el pedido ${order.label}`}>
+                <X aria-hidden /> Quitar
+              </Button>
+            </div>
+          )}
 
           <Field label="Proveedor" htmlFor="p-supplier" required error={errors.supplierId}>
             <SupplierPicker

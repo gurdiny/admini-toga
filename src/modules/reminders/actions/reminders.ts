@@ -12,7 +12,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { findClients } from "../queries";
 import { clientSearchSchema, reminderDayError, reminderIdSchema, reminderSchema, toggleReminderSchema } from "../schemas";
 
-const REVALIDATE = ["/recordatorios"];
+const REVALIDATE = ["/recordatorios", "/clientes"];
 
 type ReminderData = z.output<typeof reminderSchema>;
 

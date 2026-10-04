@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useOptimistic, useState, useTransition } from "react";
 import { Check, ChevronRight, Clock, Hash, MessageCircle, Pencil, Phone, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
@@ -304,6 +305,11 @@ function ReminderDetailDialog({
             ) : (
               <span className="text-muted-foreground">Sin teléfono</span>
             )}
+          </DetailRow>
+          <DetailRow label="Historial">
+            <Link href={`/clientes/${item.client.id}`} className="text-toga-pink-strong -my-2 inline-flex min-h-10 items-center font-bold underline-offset-4 hover:underline">
+              Pedidos y pagos de {item.client.name}
+            </Link>
           </DetailRow>
           <DetailRow label="Capturado">
             {item.createdAtLabel} por {item.createdByName}

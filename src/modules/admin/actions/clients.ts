@@ -7,7 +7,7 @@ import { BusinessError } from "@/lib/errors";
 import { toNameKey } from "@/lib/normalize";
 import { mergeClientsSchema, updateClientSchema } from "../schemas";
 
-const REVALIDATE = ["/admin/clientes", "/recordatorios"];
+const REVALIDATE = ["/admin/clientes", "/clientes", "/recordatorios"];
 
 export const updateClient = defineAction(
   { role: "OWNER", schema: updateClientSchema, revalidate: REVALIDATE },

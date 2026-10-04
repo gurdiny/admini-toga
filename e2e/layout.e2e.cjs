@@ -45,6 +45,13 @@ const DIALOGS = [
     await p.getByRole("button", { name: /Opciones de PAG-/ }).locator("visible=true").first().click();
     await p.getByRole("menuitem", { name: "Ver detalle" }).click();
   }],
+  // Búsqueda global (lupa del encabezado), con resultados.
+  ["busqueda", "/", async (p) => {
+    await p.getByRole("button", { name: "Buscar" }).click();
+    await p.getByRole("dialog", { name: "Buscar" }).getByRole("combobox").fill("a");
+    await p.getByRole("option").first().waitFor();
+  }],
+  ["pago-de-pedido", "CLIENTE", (p) => p.getByRole("button", { name: "Registrar pago de este pedido" }).first().click()],
   ["nueva-categoria", "/admin/catalogos", (p) => p.getByRole("button", { name: "Nueva categoría" }).click()],
   ["nuevo-usuario", "/admin/usuarios", (p) => p.getByRole("button", { name: "Nuevo usuario" }).click()],
   ["filtros-auditoria-calendario", "/admin/auditoria", (p) => p.getByLabel("Desde").click()],
@@ -118,19 +125,30 @@ function audit(mobile) {
       await page.goto(`${B}/api/dev/login?as=dueno@joyeria.local&next=/`);
       await page.waitForLoadState("networkidle");
 
-      // Ficha del primer proveedor (la pantalla con más contenido).
+      // Ficha del primer proveedor (la pantalla con más contenido) y del cliente con más pedidos.
       await page.goto(`${B}/proveedores`);
       const supplierHref = await page.locator('main a[href^="/proveedores/"]').first().getAttribute("href");
-      for (const [label, path] of [...PAGES, ["proveedor", supplierHref]]) {
+      await page.goto(`${B}/admin/clientes`);
+      const clientHref = await page.locator('main a[href^="/clientes/"]').first().getAttribute("href");
+      const pages = [
+        ...PAGES,
+        ["proveedor", supplierHref],
+        ["cliente", clientHref],
+        // El mostrador no ve totales: Inicio y la ficha del cliente sin montos generales.
+        ["inicio-mostrador", "/api/dev/login?as=mostrador@joyeria.local&next=/"],
+        ["cliente-mostrador", clientHref],
+      ];
+      for (const [label, path] of pages) {
         await page.goto(`${B}${path}`);
         await page.waitForLoadState("networkidle");
         const problems = await page.evaluate(audit, mobile);
         log(problems.length === 0, `${width}px ${label}${problems.length ? ": " + problems.join("; ") : ""}`);
         await page.screenshot({ path: shots(`layout-${width}-${label}.png`), fullPage: true });
       }
+      await page.goto(`${B}/api/dev/login?as=dueno@joyeria.local&next=/`);
       for (const [label, path, open, { mobileOnly } = {}] of DIALOGS) {
         if (mobileOnly && !mobile) continue;
-        await page.goto(`${B}${path}`);
+        await page.goto(`${B}${path === "CLIENTE" ? clientHref : path}`);
         await page.waitForLoadState("networkidle");
         await open(page);
         await page.getByRole("dialog").last().waitFor();

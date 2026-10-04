@@ -92,6 +92,20 @@ export async function getReminders(placement: Placement, now: Date = new Date(),
   return toItems(rows);
 }
 
+function searchWhere(q: string): Prisma.OrderReminderWhereInput {
+  const digits = q.replace(/\D/g, "");
+  const code = parseCode(q, "client");
+  return {
+    deletedAt: null,
+    OR: [
+      { note: { contains: q, mode: "insensitive" } },
+      { client: { nameKey: { contains: toNameKey(q) } } },
+      ...(code !== null ? [{ client: { code } }] : []),
+      ...(digits.length >= 3 ? [{ client: { phone: { contains: digits } } }] : []),
+    ],
+  };
+}
+
 /**
  * Buscador: por cliente (nombre, folio CLI-0005 / cli5 / 5, teléfono) o por el
  * texto del pedido, en todas las pestañas. Pendientes primero (por fecha),
@@ -100,18 +114,8 @@ export async function getReminders(placement: Placement, now: Date = new Date(),
 export async function searchReminders(query: string): Promise<ReminderItem[]> {
   const q = query.trim();
   if (!q) return [];
-  const digits = q.replace(/\D/g, "");
-  const code = parseCode(q, "client");
   const rows = await db.orderReminder.findMany({
-    where: {
-      deletedAt: null,
-      OR: [
-        { note: { contains: q, mode: "insensitive" } },
-        { client: { nameKey: { contains: toNameKey(q) } } },
-        ...(code !== null ? [{ client: { code } }] : []),
-        ...(digits.length >= 3 ? [{ client: { phone: { contains: digits } } }] : []),
-      ],
-    },
+    where: searchWhere(q),
     orderBy: [{ isCompleted: "asc" }, { targetDate: "asc" }, { targetTime: { sort: "asc", nulls: "last" } }],
     take: 60,
     include: REMINDER_INCLUDE,
@@ -120,6 +124,58 @@ export async function searchReminders(query: string): Promise<ReminderItem[]> {
   const pending = rows.filter((r) => !r.isCompleted);
   const done = rows.filter((r) => r.isCompleted).sort((a, b) => b.targetDate.getTime() - a.targetDate.getTime());
   return toItems([...pending, ...done]);
+}
+
+export type ReminderExportRow = {
+  clientCode: number;
+  clientName: string;
+  clientPhone: string | null;
+  targetDate: DayKey;
+  targetTime: string | null;
+  priority: Priority;
+  note: string;
+  isCompleted: boolean;
+  /** "04/10/2026 13:03" en hora de México. */
+  completedAt: string | null;
+  completedByName: string | null;
+  createdByName: string;
+  createdAt: string;
+};
+
+/**
+ * Lo que se ve en /recordatorios con esos filtros, sin el tope de la pantalla:
+ * la búsqueda, o la pestaña (Mañana incluye «Más adelante»).
+ */
+export async function getRemindersForExport(
+  { bucket, q, allOverdue }: { bucket: Bucket; q: string; allOverdue: boolean },
+  now: Date = new Date(),
+): Promise<ReminderExportRow[]> {
+  let rows: ReminderRowDb[];
+  if (q) {
+    rows = await db.orderReminder.findMany({ where: searchWhere(q), orderBy: [{ isCompleted: "asc" }, { targetDate: "asc" }], include: REMINDER_INCLUDE });
+  } else {
+    const days = await overdueDays(allOverdue);
+    const places: Placement[] = bucket === "manana" ? ["manana", "despues"] : [bucket];
+    const lists = await Promise.all(
+      places.map((place) => db.orderReminder.findMany({ where: placementWhere(place, now, days), orderBy: ORDER[place], include: REMINDER_INCLUDE })),
+    );
+    rows = lists.flat();
+  }
+  const stamp = "dd/MM/yyyy HH:mm";
+  return rows.map((r) => ({
+    clientCode: r.client.code,
+    clientName: r.client.name,
+    clientPhone: r.client.phone,
+    targetDate: dbToDay(r.targetDate),
+    targetTime: r.targetTime,
+    priority: r.priority,
+    note: r.note,
+    isCompleted: r.isCompleted,
+    completedAt: r.completedAt ? formatForDisplay(r.completedAt, stamp) : null,
+    completedByName: r.completedBy?.name ?? null,
+    createdByName: r.createdBy.name,
+    createdAt: formatForDisplay(r.createdAt, stamp),
+  }));
 }
 
 /** Contador de cada pestaña, más los atrasados que quedan fuera del límite de días. */

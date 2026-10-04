@@ -12,6 +12,7 @@ import { isDevelopment } from "@/lib/dev/auto-login";
 import { DevToolbar } from "@/lib/dev/dev-toolbar";
 import { getCaptureOptions } from "@/modules/payments/queries";
 import { getReminderBadge } from "@/modules/reminders/queries";
+import { GlobalSearch } from "@/modules/search/components/global-search";
 
 // Todo lo que está bajo (app) exige sesión. Esta es la verificación real;
 // el proxy solo redirige por comodidad.
@@ -34,6 +35,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           </Link>
           <TopNav isOwner={isOwner} modules={settings.modules} reminders={reminders} />
           <div className="ml-auto flex items-center gap-2">
+            <GlobalSearch />
             <span className="hidden text-sm md:inline">{user.name}</span>
             <Badge variant="secondary" className={isOwner ? "bg-toga-green-soft text-toga-green-strong" : undefined}>
               {isOwner ? "Dueño" : "Mostrador"}

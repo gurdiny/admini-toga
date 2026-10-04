@@ -15,7 +15,7 @@ El plan completo por fases está en [docs/PLAN.md](docs/PLAN.md). **Trabaja una 
 - [x] Fase 4 — Módulo de pagos (rediseño mobile first incluido)
 - [x] Fase 5 — Recordatorios / checklist
 - [x] Fase 6 — Panel de administración
-- [ ] Fase 7 — Reportes, exportación y búsqueda
+- [x] Fase 7 — Reportes, exportación y búsqueda
 - [ ] Fase 8 — Deploy, respaldos y operación
 
 Al cerrar una fase: marcarla aquí, hacer commit (`feat(fase-N): ...`) y entregar al usuario **dos listas de pruebas**:
@@ -60,7 +60,7 @@ Tokens en `src/app/globals.css` (tomados de toga.mx, tema WordPress + WooCommerc
 - Tarjetas: `bg-card shadow-toga rounded-2xl` (sombra suave de toga.mx), sin bordes duros. Fondo `#f5f5f5`.
 - **Navegación celular**: barra inferior como la de toga.mx (Recordatorios · Pagos · ➕ · Proveedores · Menú). El ➕ rosa registra un pago desde cualquier pantalla (dentro de `/proveedores/[id]` ya trae el proveedor). Inicio, Admin, cerrar sesión y el cambio de usuario de desarrollo están en «Menú» (el logo también lleva a Inicio). «Recordatorios» lleva un globo con pendientes de hoy + atrasados (rojo si hay atrasados).
 - **Diálogos**: en celular son paneles que suben desde abajo con el botón de guardar pegado abajo; desde `sm` son ventanas centradas.
-- **Revisión UX/UI obligatoria (regla de Gera)**: antes de entregar cualquier pantalla o diálogo nuevo o modificado, correr `e2e/layout.e2e.cjs` (360, 390, 600, 768 y 1280 px) y mirar las capturas. Debe dar 0 fallas: nunca scroll horizontal ni diálogos desbordados; todo lo que se toca en celular mide ≥ 40 px de alto (si se ve más chico, se agranda el área con padding + margen negativo); los pies de diálogo con más de dos botones van en columna (acción principal arriba, a todo lo ancho). En grids/flex con texto `truncate`, poner `min-w-0` al contenedor. Si se agrega una pantalla o diálogo, agregarlo a la lista de esa prueba.
+- **Revisión UX/UI obligatoria (regla de Gera)**: antes de entregar cualquier pantalla o diálogo nuevo o modificado, correr `e2e/layout.e2e.cjs` (360, 375, 390, 600, 768 y 1280 px) y mirar las capturas. Debe dar 0 fallas: nunca scroll horizontal ni diálogos desbordados; todo lo que se toca en celular mide ≥ 40 px de alto (si se ve más chico, se agranda el área con padding + margen negativo); los pies de diálogo con más de dos botones van en columna (acción principal arriba, a todo lo ancho). En grids/flex con texto `truncate`, poner `min-w-0` al contenedor. Si se agrega una pantalla o diálogo, agregarlo a la lista de esa prueba.
 - Tipografía: Neulis Neue (texto, 400/700) y Neulis Sans Bold (h1–h3), auto-hospedadas en `src/app/fonts/`.
 - Logo: `TogaLogo` y `TogaWordmark` en `src/components/brand/`. Favicon en `src/app/icon.png`.
 
@@ -78,6 +78,9 @@ src/
   modules/
     payments/          # actions.ts, schemas.ts, components/
     reminders/
+    clients/           # historial del cliente
+    search/            # búsqueda global
+    dashboard/         # gráficas de Inicio
     admin/
   lib/                 # date.ts, money.ts, result.ts, auth, prisma, audit
   components/ui/       # solo componentes generados por shadcn
@@ -152,5 +155,11 @@ Variables: [.env.example](.env.example) documenta todas. Se usa el puerto 5433 p
 - `window.ethereum.selectedAddress` («1 Issue» en el celular) lo inyecta Brave Wallet: no es de la app. En iPhone, Brave puede agrandar el texto de la barra inferior aunque el CSS calcule 11 px (medido): las etiquetas usan `truncate` para no salirse.
 - Scripts sueltos que importan módulos con `server-only`: `npx tsx --conditions=react-server archivo.ts`.
 - shadcn/ui: estilo `radix-nova`, componentes con `npx shadcn@latest add <componente>`.
+- **Búsqueda global** (`src/modules/search/`): lupa del encabezado y ⌘K/Ctrl+K (`GlobalSearch`, cmdk sin filtro propio). `globalSearch()` busca clientes (nombre, folio, teléfono), pagos (concepto, proveedor, PAG-0001) y proveedores; el código exacto va primero. Respeta los módulos apagados. Un pago lleva a `/pagos?rango=personalizado&desde=D&hasta=D&q=PAG-…`. En celular el panel baja desde arriba (el teclado no tapa resultados) y el input usa `text-base` (sin zoom en iPhone).
+- **Exportar** (`src/lib/export.ts`): columnas `ExportColumn` una vez para CSV (BOM, coma, CRLF, días dd/mm/aaaa, sin fórmulas) y Excel (`exceljs` con import dinámico: días como fecha real, montos con formato de pesos, total con `SUM` y resultado calculado con Decimal). Rutas `src/app/api/exportar/{pagos,recordatorios}/route.ts` leen los mismos search params que la página (`parsePaymentFilters`, `parseBucket`) más `formato=xlsx|csv`; verifican sesión y permiso adentro (el proxy no protege). **Pagos: solo el dueño** (es un reporte, `canViewTotals`); recordatorios: cualquiera que capture. Botón `ExportMenu` (`src/components/export-menu.tsx`).
+- **Inicio** (`src/app/(app)/page.tsx`): contadores Hoy/Mañana/Atrasados y «Para hoy» (primeros 5, se palomean ahí mismo con `ReminderList`). El dueño ve además lo pagado en el mes, «Por pagar hoy» y la gráfica de gasto por categoría (`CategoryChart`, Recharts: barras horizontales de un tono `--toga-pink-strong`, el punto de color es el de la categoría; `Number()` solo para dibujar). El mostrador no ve montos.
+- **Historial del cliente** `/clientes/[id]` (`src/modules/clients/queries.ts`, `getClientHistory`): pedidos con sus pagos a proveedores (`SupplierPayment.orderId`). Lo ve cualquiera que capture; «Costo» (sumas) solo el dueño, igual que Editar/Fusionar. `/admin/clientes/[id]` redirige aquí. «Registrar pago de este pedido» (`OrderPaymentButton`) abre el formulario de pago con `preset.order`; el pedido se ve como tarjeta verde con «Quitar», se conserva al editar el pago (`PaymentFormValues.order`) y aparece en «Ver detalle» del pago. El detalle del recordatorio enlaza al historial.
+- `toMXN()` de `src/lib/money.ts` es el único cálculo de «monto en pesos» (otra moneda × tipo de cambio, al centavo).
+- Un `trigger` de diálogo (Radix `asChild`) nunca se arma en un Server Component: al navegar sin recargar falla («Primitive.button failed to slot»). Hacer un componente de cliente que cree el botón (ver `OrderPaymentButton`).
 - Para exportar a Excel usar `exceljs`: el paquete `xlsx` publicado en npm está desactualizado y con vulnerabilidades conocidas.
 - El modelo `User` debe ser compatible con Better Auth: el hash de la contraseña vive en `Account.password`, no en `User`.

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { RowMenu } from "@/components/row-menu";
 import { Badge } from "@/components/ui/badge";
@@ -120,6 +121,13 @@ function PaymentDetailDialog({
           <Row label="Concepto">{payment.concept}</Row>
           <Row label="Categoría">{detail.categoryName}</Row>
           <Row label="Método">{PAYMENT_METHOD_LABELS[payment.paymentMethod]}</Row>
+          {payment.order && (
+            <Row label="Pedido">
+              <Link href={`/clientes/${payment.order.clientId}`} className="text-toga-pink-strong -my-2 inline-flex min-h-10 items-center font-bold underline-offset-4 hover:underline">
+                {payment.order.label}
+              </Link>
+            </Row>
+          )}
           {payment.currency !== "MXN" && payment.exchangeRate && (
             <Row label="Tipo de cambio">
               1 {payment.currency} = {formatMoney(payment.exchangeRate, "MXN")}

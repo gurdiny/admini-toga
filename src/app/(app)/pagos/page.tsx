@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Search, Wallet } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
+import { ExportMenu } from "@/components/export-menu";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -129,10 +130,19 @@ export default async function PaymentsPage({ searchParams }: PageProps<"/pagos">
           />
         ) : (
           <>
-            <p className="text-muted-foreground text-sm">
-              {total} pago{total === 1 ? "" : "s"}
-              {pages > 1 && ` · página ${filters.pagina} de ${pages}`}
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-muted-foreground text-sm">
+                {total} pago{total === 1 ? "" : "s"}
+                {pages > 1 && ` · página ${filters.pagina} de ${pages}`}
+              </p>
+              {/* Exportar es un reporte: solo el dueño. Lleva los mismos filtros, sin paginar. */}
+              {showTotals && (
+                <ExportMenu
+                  href={paymentsHref(filters, { pagina: null }).replace(/^\/pagos/, "/api/exportar/pagos")}
+                  description={`Los ${total} pago${total === 1 ? "" : "s"} de ${RANGE_LABEL[filters.rango]}${filters.q ? ` que coinciden con «${filters.q}»` : ""}.`}
+                />
+              )}
+            </div>
 
             {/* Celular: tarjetas */}
             <ul className="bg-card shadow-toga divide-y overflow-hidden rounded-2xl xl:hidden">

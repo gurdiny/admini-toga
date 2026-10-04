@@ -284,7 +284,7 @@ Una fase por sesión, y no avances hasta que la verificación de esa fase pase. 
 - [x] Fase 4 — Módulo de pagos
 - [x] Fase 5 — Checklist
 - [x] Fase 6 — Panel de administración
-- [ ] Fase 7 — Reportes y búsqueda
+- [x] Fase 7 — Reportes y búsqueda
 - [ ] Fase 8 — Deploy y respaldos
 
 Tres reglas que ahorran mucho trabajo:

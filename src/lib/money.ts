@@ -69,3 +69,15 @@ export function formatMoney(value: MoneyInput, currency = "MXN"): string {
 export function formatMXN(value: MoneyInput): string {
   return formatMoney(value, "MXN");
 }
+
+/**
+ * Monto en pesos de un pago: si es en otra moneda, × su tipo de cambio,
+ * redondeado al centavo (sin tipo de cambio, se toma 1).
+ */
+export function toMXN(payment: { amount: MoneyInput; currency: string; exchangeRate: MoneyInput | null }): Decimal {
+  const amount = toDecimal(payment.amount);
+  if (payment.currency === "MXN") return amount;
+  // El tipo de cambio lleva hasta 4 decimales: no pasa por parseMoney.
+  const rate = payment.exchangeRate === null ? new Decimal(1) : new Decimal(payment.exchangeRate);
+  return amount.mul(rate).toDecimalPlaces(2);
+}

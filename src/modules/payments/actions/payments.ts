@@ -11,7 +11,7 @@ import { zId } from "@/lib/validation";
 import type { Prisma } from "@/generated/prisma/client";
 import { idSchema, paymentSchema } from "../schemas";
 
-const REVALIDATE = ["/pagos", "/proveedores"];
+const REVALIDATE = ["/pagos", "/proveedores", "/clientes"];
 
 type PaymentData = z.output<typeof paymentSchema>;
 
@@ -29,6 +29,10 @@ async function validatePayment(tx: Prisma.TransactionClient, data: PaymentData, 
   if (!supplier.isActive && !editingId) throw new BusinessError("El proveedor está desactivado.");
   if (!category) throw new BusinessError("La categoría no existe.");
   if (!category.isActive && !editingId) throw new BusinessError("La categoría está desactivada.");
+  if (data.orderId) {
+    const order = await tx.orderReminder.findFirst({ where: { id: data.orderId, deletedAt: null }, select: { id: true } });
+    if (!order) throw new BusinessError("Ese pedido ya no existe. Quítalo del pago o recarga la página.");
+  }
 
   if (!data.debtId) return;
   const debt = await tx.supplierDebt.findFirst({

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatMoney, formatMXN, moneyToString, parseMoney, sumDecimals, toDecimal } from "./money";
+import { formatMoney, formatMXN, moneyToString, parseMoney, sumDecimals, toDecimal, toMXN } from "./money";
 
 describe("parseMoney", () => {
   it("acepta formatos comunes de captura", () => {
@@ -44,5 +44,17 @@ describe("formato", () => {
 
   it("moneyToString para pasar al cliente", () => {
     expect(moneyToString("14299.5")).toBe("14299.50");
+  });
+});
+
+describe("toMXN", () => {
+  it("pesos se quedan igual", () => {
+    expect(toMXN({ amount: "1250.50", currency: "MXN", exchangeRate: null }).toFixed(2)).toBe("1250.50");
+  });
+  it("dólares × tipo de cambio, al centavo", () => {
+    expect(toMXN({ amount: "100.00", currency: "USD", exchangeRate: "17.3456" }).toFixed(2)).toBe("1734.56");
+  });
+  it("sin tipo de cambio cuenta 1 a 1", () => {
+    expect(toMXN({ amount: "10.00", currency: "USD", exchangeRate: null }).toFixed(2)).toBe("10.00");
   });
 });

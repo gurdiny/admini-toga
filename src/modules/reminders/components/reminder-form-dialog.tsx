@@ -37,12 +37,14 @@ export type ReminderFormValues = {
 type Props = {
   /** Con `reminder` edita; sin él, captura uno nuevo. */
   reminder?: ReminderFormValues;
+  /** Pedido nuevo con el cliente ya elegido (desde su historial). */
+  presetClient?: ClientOption;
   trigger?: React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 };
 
-export function ReminderFormDialog({ trigger, open, onOpenChange, reminder }: Props) {
+export function ReminderFormDialog({ trigger, open, onOpenChange, reminder, presetClient }: Props) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isOpen = open ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
@@ -51,7 +53,7 @@ export function ReminderFormDialog({ trigger, open, onOpenChange, reminder }: Pr
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         {/* El formulario se monta al abrir: siempre arranca limpio. */}
-        <ReminderForm reminder={reminder} onDone={() => setOpen(false)} />
+        <ReminderForm reminder={reminder} presetClient={presetClient} onDone={() => setOpen(false)} />
       </DialogContent>
     </Dialog>
   );
@@ -69,9 +71,9 @@ function guessNewClient(search: string): NewClient {
   return { name: text, phone: "" };
 }
 
-function ReminderForm({ reminder, onDone }: { reminder?: ReminderFormValues; onDone: () => void }) {
+function ReminderForm({ reminder, presetClient, onDone }: { reminder?: ReminderFormValues; presetClient?: ClientOption; onDone: () => void }) {
   const isEdit = Boolean(reminder);
-  const [client, setClient] = useState<ClientOption | null>(reminder?.client ?? null);
+  const [client, setClient] = useState<ClientOption | null>(reminder?.client ?? presetClient ?? null);
   const [newClient, setNewClient] = useState<NewClient | null>(null);
   const [values, setValues] = useState(() => ({
     targetDate: reminder?.targetDate ?? (getTomorrow() as string),
