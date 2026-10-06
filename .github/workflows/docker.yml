@@ -1,10 +1,11 @@
 # Compila la imagen de producción y la publica en GitHub Container Registry.
 # El VPS no compila nada (3 núcleos y n8n en producción): solo descarga.
 #
-#   ghcr.io/gurdiny/admini-toga:latest     último commit de main
-#   ghcr.io/gurdiny/admini-toga:sha-abc1234 cada commit (para regresar a una versión)
+#   ghcr.io/gurdiny/admini-toga:sha-abc1234 cada commit: es el que usa producción
+#   ghcr.io/gurdiny/admini-toga:latest      último commit de main (referencia; producción no lo usa)
 #
-# Publicar la imagen NO actualiza producción: eso se hace en Easypanel (ver docs/DEPLOY.md).
+# Publicar la imagen NO actualiza producción: se cambia TOGA_IMAGE_TAG a mano
+# y se despliega en Easypanel (ver docs/DEPLOY.md).
 name: Imagen Docker
 
 on:

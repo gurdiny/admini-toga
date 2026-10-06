@@ -67,14 +67,24 @@ cron `/root/backup-diario.sh` de las 3:30 y el firewall (solo 22/80/443 abiertos
    unset GHCR_TOKEN
    chmod 600 /root/.docker/config.json
    stat -c '%a %U %n' /root/.docker/config.json     # → 600 root /root/.docker/config.json
-   docker pull ghcr.io/gurdiny/admini-toga:latest
    ```
 
    Docker guarda el token en `config.json` sin cifrar (por eso el aviso «stored unencrypted» y el
    permiso 600: solo root lo lee). Con `read:packages` lo único que permite es descargar imágenes.
 
+### Versiones: siempre `sha-xxxxxxx`, nunca `latest`
+
+Cada commit de `main` publica la imagen con el tag **`sha-` + los 7 primeros caracteres del commit**
+(p. ej. `sha-d31f5f0`). El compose usa ese tag, así que **el archivo dice exactamente qué versión
+corre**, y desplegar es siempre un cambio consciente de `TOGA_IMAGE_TAG` en `.env.production`.
+(Actions también publica `latest`, pero producción nunca lo usa.)
+
+Cómo saber el tag de un commit: en tu computadora `git rev-parse --short=7 HEAD`, o en GitHub →
+Actions → la ejecución en verde de ese commit → el `sha` que aparece junto al mensaje.
+
 El compose lleva `pull_policy: never`: **Easypanel nunca descarga la imagen**, solo usa la que bajó root
-con `docker pull`. Por eso cada Deploy va precedido de un `docker pull` (ver «Actualizar»).
+con `docker pull`. Si olvidas el pull no pasa en silencio: `render.sh` se niega a generar el compose y
+te dice qué `docker pull` falta.
 
 ### 1.2 DNS en Cloudflare
 
@@ -93,8 +103,10 @@ cp repo/deploy/env.production.example .env.production
 chmod 600 .env.production
 openssl rand -hex 24        # → POSTGRES_PASSWORD
 openssl rand -base64 32     # → BETTER_AUTH_SECRET
-nano .env.production        # pega los dos valores y revisa APP_DOMAIN=admin.toga.mx
+nano .env.production        # pega los dos valores, revisa APP_DOMAIN=admin.toga.mx
+                            # y pon TOGA_IMAGE_TAG=sha-xxxxxxx (el commit a desplegar)
 
+docker pull ghcr.io/gurdiny/admini-toga:sha-xxxxxxx   # el mismo tag (prueba también el token)
 bash repo/deploy/render.sh  # valida y muestra el compose listo para copiar
 ```
 
@@ -107,9 +119,7 @@ conectar a la base, y si cambia `BETTER_AUTH_SECRET` todos tienen que volver a i
    `render.sh` en el editor del compose y guarda. **Todavía no le des Deploy.**
 2. **Dominio**: pestaña *Domains* del servicio → *Add domain* → host `admin.toga.mx`, HTTPS activado,
    servicio **`toga-app`**, puerto **3000**.
-3. Confirma que la imagen ya está en el servidor: `docker image ls ghcr.io/gurdiny/admini-toga`
-   (si no, `docker pull ghcr.io/gurdiny/admini-toga:latest`).
-4. **Deploy**.
+3. **Deploy**.
 
 ### 1.5 Verificar
 
@@ -209,26 +219,40 @@ npm run backup                                  # → backups/joyeria_AAAA-MM-DD
 npm run backup:test -- backups/joyeria_….dump   # restaura en una base temporal y compara
 ```
 
-## 3. Actualizar
+## 3. Actualizar (cada despliegue cambia el tag a conciencia)
 
 1. Push a `main` y espera el ✓ verde en GitHub Actions (si las pruebas fallan, no se publica imagen).
-2. En el VPS, como root: `docker pull ghcr.io/gurdiny/admini-toga:latest` (obligatorio: Easypanel no
-   descarga la imagen, `pull_policy: never`).
-3. En Easypanel: **Deploy** del servicio `toga`. Las migraciones nuevas se aplican solas al arrancar.
-4. Verifica: `curl -s https://admin.toga.mx/api/health` y `docker logs --tail 30 toga-app`.
+   Anota el tag: `sha-` + los 7 primeros caracteres de ese commit.
+2. **Respaldo antes de cambiar** (sobre todo si la versión trae migración):
+   `/opt/toga-app/repo/deploy/backup.sh`
+3. En el VPS, como root:
 
-Antes de un cambio grande (sobre todo si trae migración), saca un respaldo a mano:
-`/opt/toga-app/repo/deploy/backup.sh`.
+   ```bash
+   cd /opt/toga-app
+   docker pull ghcr.io/gurdiny/admini-toga:sha-NUEVO
+   nano .env.production                 # TOGA_IMAGE_TAG=sha-NUEVO  (anota cuál había, por si regresas)
+   git -C repo pull                     # por si cambió la plantilla o los scripts
+   bash repo/deploy/render.sh           # falla si el tag no es sha-xxxxxxx o la imagen no está bajada
+   ```
 
-Si cambias algo de `.env.production` o del compose: `cd /opt/toga-app/repo && git pull`,
-`bash deploy/render.sh`, pega el resultado en Easypanel y Deploy.
+4. En Easypanel: pega el compose nuevo (solo cambia la línea `image:`) y **Deploy**. Las migraciones
+   nuevas se aplican solas al arrancar.
+5. Verifica que corre la versión que querías:
+
+   ```bash
+   docker inspect -f '{{.Config.Image}}' toga-app     # → ghcr.io/gurdiny/admini-toga:sha-NUEVO
+   curl -s https://admin.toga.mx/api/health
+   docker logs --tail 30 toga-app
+   ```
 
 ### Regresar a una versión anterior
 
-Cada commit publica también la etiqueta `sha-abc1234` (la ves en GitHub → Packages).
-`docker pull ghcr.io/gurdiny/admini-toga:sha-abc1234`, en `.env.production` pon
-`TOGA_IMAGE_TAG=sha-abc1234`, corre `render.sh`, pega y Deploy. Ojo: las
-migraciones no se deshacen solas; si la versión nueva cambió la base, restaura el respaldo previo.
+Es el mismo flujo con el tag anterior (el que anotaste en el paso 3): `docker pull` de ese tag,
+`TOGA_IMAGE_TAG=sha-ANTERIOR`, `render.sh`, pegar y Deploy. Ojo: las migraciones no se deshacen solas; si
+la versión nueva cambió la base, restaura también el respaldo del paso 2 (`restore.sh --replace`).
+
+Para liberar disco, de vez en cuando: `docker image prune -a --filter "until=720h"` (borra imágenes sin
+usar de más de 30 días; la que está corriendo no se toca).
 
 ## 4. Rutina
 
