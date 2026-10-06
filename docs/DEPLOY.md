@@ -47,7 +47,7 @@ cron `/root/backup-diario.sh` de las 3:30 y el firewall (solo 22/80/443 abiertos
    (primero corre lint, tipos y pruebas; luego compila y publica).
 2. **Imagen privada**: GitHub → tu perfil → **Packages** → `admini-toga` → **Package settings** →
    *Danger zone* → *Change visibility* → **Private**. (Actions sigue publicando igual.)
-   Comprueba que ya no se puede bajar sin credenciales (debe decir **401**):
+   Comprueba que ya no se puede bajar sin credenciales (debe decir **401** o **403**):
 
    ```bash
    T=$(curl -s "https://ghcr.io/token?scope=repository:gurdiny/admini-toga:pull" | sed -E 's/.*"token":"([^"]*)".*/\1/')
