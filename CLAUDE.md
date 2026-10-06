@@ -62,7 +62,14 @@ Tokens en `src/app/globals.css` (tomados de toga.mx, tema WordPress + WooCommerc
 - **Navegación celular**: barra inferior como la de toga.mx (Recordatorios · Pagos · ➕ · Proveedores · Menú). El ➕ rosa registra un pago desde cualquier pantalla (dentro de `/proveedores/[id]` ya trae el proveedor). Inicio, Admin, cerrar sesión y el cambio de usuario de desarrollo están en «Menú» (el logo también lleva a Inicio). «Recordatorios» lleva un globo con pendientes de hoy + atrasados (rojo si hay atrasados).
 - **Diálogos**: en celular son paneles que suben desde abajo con el botón de guardar pegado abajo; desde `sm` son ventanas centradas.
 - **Revisión UX/UI obligatoria (regla de Gera)**: antes de entregar cualquier pantalla o diálogo nuevo o modificado, correr `e2e/layout.e2e.cjs` (360, 375, 390, 600, 768 y 1280 px) y mirar las capturas. Debe dar 0 fallas: nunca scroll horizontal ni diálogos desbordados; todo lo que se toca en celular mide ≥ 40 px de alto (si se ve más chico, se agranda el área con padding + margen negativo); los pies de diálogo con más de dos botones van en columna (acción principal arriba, a todo lo ancho). En grids/flex con texto `truncate`, poner `min-w-0` al contenedor. Si se agrega una pantalla o diálogo, agregarlo a la lista de esa prueba.
-- Tipografía: Neulis Neue (texto, 400/700) y Neulis Sans Bold (h1–h3), auto-hospedadas en `src/app/fonts/`.
+- **Identidad «Plata .925»** (utilidades en `globals.css`):
+  - `.plate` es la placa de plata cepillada, con brillo una sola vez al cargar (respeta `prefers-reduced-motion`). Va solo en **el número que importa de la pantalla**: pendientes en Inicio, «Le debes hoy» en el proveedor, pagado/por pagar en Pagos y el logo del login. **Máximo una por pantalla**; todo lo demás en tarjeta blanca. Lleva `.hallmark-925` (sello) solo si no tapa ningún dato. Divisores dentro de la placa: `.plate-rule border-l`.
+  - Folios y códigos (`CLI-0005`, `PROV-0003`, `ADE-0004`) van con `.stamp` cuando son etiqueta propia. Dentro de una línea de texto se quedan como texto.
+  - `Monogram` (`src/components/monogram.tsx`): iniciales del proveedor en moneda de plata, en listas y fichas de proveedor y en los pagos.
+  - Rótulos pequeños con `.eyebrow`. Títulos de pantalla con `PageHeader`: acción en la misma fila; si el texto no cabe en celular, versión compacta con `aria-label` completo (ver `NewReminderButton compact`).
+  - Nombres de negocio largos: `line-clamp-2`, no `truncate`. Si el enlace lleva relleno táctil (`-my-2 py-2`), el recorte va en un `span` interior (si no, asoma la tercera línea).
+  - Prioridad alta: franja lateral `before:` en rojo, no contorno. Checkbox de pedido redondo con `animate-check-pop`.
+- Tipografía: Neulis Neue (texto, 400/700) y Neulis Sans Bold (h1–h3 y números grandes con `font-heading`), auto-hospedadas en `src/app/fonts/`.
 - Logo: `TogaLogo` y `TogaWordmark` en `src/components/brand/`. Favicon en `src/app/icon.png`.
 
 ## Negocio

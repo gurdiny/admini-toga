@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
-import { AlertCircle } from "lucide-react";
+import { useActionState, useState } from "react";
+import { AlertCircle, Eye, EyeOff } from "lucide-react";
 import { login } from "@/lib/auth/actions";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 
 export function LoginForm({ next }: { next?: string }) {
   const [state, action, pending] = useActionState(login, undefined);
+  const [showPassword, setShowPassword] = useState(false);
 
   return (
     <Card>
@@ -35,20 +36,39 @@ export function LoginForm({ next }: { next?: string }) {
               inputMode="email"
               required
               defaultValue={state?.email}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               className="h-11"
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="password">Contraseña</Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              className="h-11"
-            />
+            <div className="relative">
+              <Input
+                id="password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                required
+                className="h-11 pr-12"
+              />
+              {/* En el teclado del iPhone es fácil equivocarse: poder ver lo escrito evita intentos fallidos. */}
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Ocultar" : "Mostrar"}
+                aria-pressed={showPassword}
+                aria-controls="password"
+                className="text-muted-foreground hover:text-foreground absolute top-1/2 right-1 flex size-10 -translate-y-1/2 items-center justify-center rounded-full"
+              >
+                {showPassword ? <EyeOff className="size-[18px]" aria-hidden /> : <Eye className="size-[18px]" aria-hidden />}
+              </button>
+            </div>
           </div>
 
           <Button type="submit" variant="brand" size="lg" className="w-full" disabled={pending}>

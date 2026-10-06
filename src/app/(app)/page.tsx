@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CalendarCheck, ChevronRight, Wallet } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
+import { Button } from "@/components/ui/button";
 import { canDelete, canEdit, canReschedule, canViewTotals } from "@/lib/auth/permissions";
 import { requireUser } from "@/lib/auth/session";
 import { formatDay, getRange, getToday } from "@/lib/date";
@@ -37,28 +38,47 @@ export default async function Home() {
   const monthName = formatDay(month.from, "MMMM");
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Hola, {user.name}</h1>
-        <p className="text-muted-foreground text-sm first-letter:uppercase">{formatDay(getToday(now), "EEEE d 'de' MMMM")}</p>
+    <div className="space-y-7">
+      <div className="space-y-1">
+        <p className="eyebrow first-letter:uppercase">{formatDay(getToday(now), "EEEE d 'de' MMMM")}</p>
+        <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight">Hola, {user.name}</h1>
       </div>
 
       {counts && today && (
         <>
-          <section aria-label="Pendientes" className="grid grid-cols-3 gap-3">
-            {(["hoy", "manana", "atrasados"] as const).map((bucket) => {
-              const alert = bucket === "atrasados" && counts.atrasados > 0;
-              return (
-                <Link
-                  key={bucket}
-                  href={bucketHref(bucket)}
-                  className={cn("bg-card shadow-toga min-w-0 rounded-2xl p-4", alert && "ring-destructive/40 text-destructive ring-1")}
-                >
-                  <p className="text-2xl font-bold tabular-nums">{counts[bucket]}</p>
-                  <p className="truncate text-sm">{BUCKET_LABELS[bucket]}</p>
-                </Link>
-              );
-            })}
+          {/* La placa de plata: lo pendiente del día, grabado. */}
+          <section aria-label="Pendientes" className="plate px-1 pt-3 pb-2">
+            <div className="flex items-center justify-between px-3">
+              <p className="text-[0.6875rem] font-bold tracking-[0.12em] text-plata-ink/70 uppercase">Pendientes</p>
+              <span className="hallmark-925" aria-hidden>
+                925
+              </span>
+            </div>
+            <div className="mt-1 grid grid-cols-3 md:grid-cols-[repeat(3,minmax(0,11rem))]">
+              {(["hoy", "manana", "atrasados"] as const).map((bucket, i) => {
+                const alert = bucket === "atrasados" && counts.atrasados > 0;
+                return (
+                  <Link
+                    key={bucket}
+                    href={bucketHref(bucket)}
+                    className={cn("min-w-0 px-3 py-2 transition-colors hover:bg-white/40 active:bg-white/60", i > 0 && "plate-rule border-l")}
+                  >
+                    <p
+                      className={cn(
+                        "font-heading text-[2.5rem] leading-none tabular-nums",
+                        alert ? "text-destructive" : counts[bucket] === 0 && "text-plata-ink/45",
+                      )}
+                    >
+                      {counts[bucket]}
+                    </p>
+                    <p className={cn("mt-1 flex items-center gap-1.5 truncate text-sm font-bold", alert && "text-destructive")}>
+                      {alert && <span className="bg-destructive size-1.5 shrink-0 rounded-full" aria-hidden />}
+                      {BUCKET_LABELS[bucket]}
+                    </p>
+                  </Link>
+                );
+              })}
+            </div>
           </section>
 
           <section aria-labelledby="hoy" className="space-y-3">
@@ -77,7 +97,17 @@ export default async function Home() {
               <EmptyState
                 icon={CalendarCheck}
                 title="Nada pendiente para hoy"
-                description={counts.atrasados > 0 ? "Pero hay pedidos atrasados: revísalos en Atrasados." : "Los pedidos de hoy ya están completos o no hay ninguno."}
+                description={counts.atrasados > 0 ? "Pero hay pedidos atrasados por revisar." : "Los pedidos de hoy ya están completos o no hay ninguno."}
+                action={
+                  counts.atrasados > 0 && (
+                    <Button asChild variant="outline" className="text-destructive">
+                      <Link href={bucketHref("atrasados")}>
+                        Ver {counts.atrasados} atrasado{counts.atrasados === 1 ? "" : "s"}
+                        <ChevronRight aria-hidden />
+                      </Link>
+                    </Button>
+                  )
+                }
               />
             ) : (
               <ReminderList
@@ -99,17 +129,17 @@ export default async function Home() {
               <ChevronRight className="size-4" aria-hidden />
             </Link>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-card shadow-toga min-w-0 space-y-1 rounded-2xl p-4">
+          <div className="bg-card shadow-toga grid grid-cols-2 rounded-2xl">
+            <div className="min-w-0 space-y-1 p-4">
               <p className="text-muted-foreground text-xs">Pagado en {monthName}</p>
-              <p className="truncate text-xl leading-tight font-bold tabular-nums">{formatMXN(summary.totalPaid)}</p>
+              <p className="font-heading truncate text-xl leading-tight tabular-nums">{formatMXN(summary.totalPaid)}</p>
               <p className="text-muted-foreground text-xs">
                 {summary.count} pago{summary.count === 1 ? "" : "s"}
               </p>
             </div>
-            <div className="bg-card shadow-toga ring-destructive/25 min-w-0 space-y-1 rounded-2xl p-4 ring-1">
+            <div className="min-w-0 space-y-1 border-l p-4">
               <p className="text-muted-foreground text-xs">Por pagar hoy</p>
-              <p className="truncate text-xl leading-tight font-bold tabular-nums">
+              <p className="font-heading truncate text-xl leading-tight tabular-nums">
                 <BalanceText balances={summary.totalOwed} />
               </p>
               <p className="text-muted-foreground text-xs">a todos los proveedores</p>

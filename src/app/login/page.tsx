@@ -18,11 +18,15 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   return (
     <main className="flex flex-1 items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <TogaLogo priority className="h-auto w-48" />
+        {/* La placa de plata con el logo: la primera impresión del día. */}
+        <div className="plate flex flex-col items-center gap-3 px-6 pt-8 pb-6 text-center">
+          <span className="hallmark-925 absolute top-4 right-4" aria-hidden>
+            925
+          </span>
+          <TogaLogo priority className="h-auto w-44" />
           <div className="space-y-1">
             <h1 className="text-lg font-bold">Control interno</h1>
-            <p className="text-muted-foreground text-sm">Entra con tu correo y contraseña.</p>
+            <p className="text-plata-ink/70 text-sm">Entra con tu correo y contraseña.</p>
           </div>
         </div>
         <LoginForm next={nextPath} />

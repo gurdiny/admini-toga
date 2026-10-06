@@ -73,7 +73,7 @@ export default async function RemindersPage({ searchParams }: PageProps<"/record
       <PageHeader
         title="Recordatorios"
         description="Pedidos de clientes por entregar o avisar."
-        actions={<NewReminderButton className="hidden md:inline-flex" />}
+        actions={<NewReminderButton compact />}
       />
 
       <form className="mb-3" role="search">
@@ -115,9 +115,6 @@ export default async function RemindersPage({ searchParams }: PageProps<"/record
           );
         })}
       </nav>
-
-      {/* En celular la captura va arriba de la lista, a todo lo ancho. */}
-      <NewReminderButton className="mb-4 h-12 w-full md:hidden" />
 
       {found ? (
         <section aria-labelledby="resultados" className="space-y-3">

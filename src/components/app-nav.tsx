@@ -87,7 +87,17 @@ export function BottomNav({ isOwner, modules, reminders, userName, options, defa
         aria-label="Principal"
       >
         {/* Columnas según los módulos encendidos: Recordatorios · Pagos · ➕ · Proveedores · Menú. */}
-        <ul className="grid h-16 items-center" style={{ gridTemplateColumns: `repeat(${1 + Number(modules.reminders) + 3 * Number(modules.payments)}, minmax(0, 1fr))` }}>
+        {/* El botón central ocupa lo justo (4.5rem): el resto del ancho es para las etiquetas. */}
+        <ul
+          className="grid h-16 items-center"
+          style={{
+            gridTemplateColumns: [
+              ...(modules.reminders ? ["minmax(0,1fr)"] : []),
+              ...(modules.payments ? ["minmax(0,1fr)", "4.5rem", "minmax(0,1fr)"] : []),
+              "minmax(0,1fr)",
+            ].join(" "),
+          }}
+        >
           {modules.reminders && <TabLink {...REMINDERS} active={isActive(pathname, REMINDERS.href)} badge={reminders} />}
           {modules.payments && (
             <>
@@ -117,11 +127,11 @@ export function BottomNav({ isOwner, modules, reminders, userName, options, defa
               type="button"
               onClick={() => setMenuOpen(true)}
               className={cn(
-                "flex h-16 w-full flex-col items-center justify-center gap-0.5 text-[11px]",
+                "flex h-16 w-full flex-col items-center justify-center gap-1 text-[11px] tracking-tight",
                 isActive(pathname, "/admin") || pathname === "/" ? "text-foreground font-bold" : "text-muted-foreground",
               )}
             >
-              <Menu className="size-6" aria-hidden />
+              <TabIcon icon={Menu} active={isActive(pathname, "/admin") || pathname === "/"} />
               <span className="block max-w-full truncate px-0.5">Menú</span>
             </button>
           </li>
@@ -182,18 +192,32 @@ function TabLink({
         href={href}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "flex h-16 min-w-0 flex-col items-center justify-center gap-0.5 text-[10px] tracking-tight min-[380px]:text-[11px] min-[380px]:tracking-normal",
+          "flex h-16 min-w-0 flex-col items-center justify-center gap-1 text-[10px] tracking-tight min-[380px]:text-[11px]",
           active ? "text-foreground font-bold" : "text-muted-foreground",
         )}
       >
         <span className="relative">
-          <Icon className={cn("size-6", active && "text-toga-pink-strong")} aria-hidden />
-          {badge && <CountBadge badge={badge} className="absolute -top-1.5 left-4" />}
+          <TabIcon icon={Icon} active={active} />
+          {badge && <CountBadge badge={badge} className="absolute -top-1.5 left-7 ring-2 ring-[var(--card)]" />}
         </span>
         {/* Si el navegador agranda la letra (Brave en iPhone), se recorta con «…» en vez de salirse. */}
         <span className="block max-w-full truncate px-0.5">{label}</span>
       </Link>
     </li>
+  );
+}
+
+/** Ícono de la pestaña; la activa lleva una cápsula rosa detrás. */
+function TabIcon({ icon: Icon, active }: { icon: typeof Home; active: boolean }) {
+  return (
+    <span
+      className={cn(
+        "flex h-7 w-12 items-center justify-center rounded-full transition-colors duration-200",
+        active && "bg-toga-pink-soft text-toga-pink-strong",
+      )}
+    >
+      <Icon className="size-[22px]" strokeWidth={active ? 2.25 : 1.75} aria-hidden />
+    </span>
   );
 }
 

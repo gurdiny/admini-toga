@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Search, Wallet } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
+import { Monogram } from "@/components/monogram";
 import { ExportMenu } from "@/components/export-menu";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -92,16 +93,21 @@ export default async function PaymentsPage({ searchParams }: PageProps<"/pagos">
       {/* ─── Totales: solo el dueño ─────────────────────────────────────── */}
       {summary && (
         <section aria-label="Resumen" className="mb-6 space-y-4">
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Kpi label={`Pagado ${RANGE_LABEL[filters.rango]}`} value={formatMXN(summary.totalPaid)} />
-            <Kpi label="Por pagar hoy (todos)" value={<BalanceText balances={summary.totalOwed} />} tone="owed" />
-            <Kpi
-              label="Proveedor con más pagos"
-              value={summary.topSupplier?.name ?? "—"}
-              detail={summary.topSupplier ? formatMXN(summary.topSupplier.total) : undefined}
-              small
-            />
-            <Kpi label="Cantidad de pagos" value={String(summary.count)} />
+          {/* La placa: lo pagado en el periodo y lo que se debe hoy. */}
+          <div className="grid gap-3 lg:grid-cols-[2fr_1fr]">
+            <div className="plate grid grid-cols-2 py-1">
+              <Kpi label={`Pagado ${RANGE_LABEL[filters.rango]}`} value={formatMXN(summary.totalPaid)} onPlate />
+              <Kpi label="Por pagar hoy (todos)" value={<BalanceText balances={summary.totalOwed} />} onPlate divided />
+            </div>
+            <div className="bg-card shadow-toga grid grid-cols-[1fr_auto] rounded-2xl">
+              <Kpi
+                label="Proveedor con más pagos"
+                value={summary.topSupplier?.name ?? "—"}
+                detail={summary.topSupplier ? formatMXN(summary.topSupplier.total) : undefined}
+                small
+              />
+              <Kpi label="Cantidad de pagos" value={String(summary.count)} divided />
+            </div>
           </div>
           {summary.count > 0 && (
             <div className="grid gap-3 md:grid-cols-2">
@@ -147,15 +153,18 @@ export default async function PaymentsPage({ searchParams }: PageProps<"/pagos">
             {/* Celular: tarjetas */}
             <ul className="bg-card shadow-toga divide-y overflow-hidden rounded-2xl xl:hidden">
               {items.map((p) => (
-                <li key={p.id} className="flex items-start gap-2 py-3 pr-1 pl-4">
+                <li key={p.id} className="flex items-start gap-3 py-3 pr-1 pl-4">
+                  <Monogram name={p.supplierName} className="mt-0.5 size-9 text-xs" />
                   <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex items-baseline justify-between gap-3">
-                      <Link href={`/proveedores/${p.supplierId}`} className="-my-2 truncate py-2 font-bold">
-                        {p.supplierName}
+                    <div className="flex items-start justify-between gap-3">
+                      {/* Nombres de negocio largos: hasta dos líneas antes de cortar. */}
+                      <Link href={`/proveedores/${p.supplierId}`} className="-my-2 block min-w-0 py-2 leading-snug font-bold">
+                        {/* El recorte va en el span: si fuera en el enlace, su relleno táctil dejaría asomar la tercera línea. */}
+                        <span className="line-clamp-2">{p.supplierName}</span>
                       </Link>
-                      <span className="text-base font-bold whitespace-nowrap tabular-nums">{formatMoney(p.amount, p.currency)}</span>
+                      <span className="font-heading text-base whitespace-nowrap tabular-nums">{formatMoney(p.amount, p.currency)}</span>
                     </div>
-                    <p className="truncate text-sm">{p.concept}</p>
+                    <p className="line-clamp-2 text-sm">{p.concept}</p>
                     <p className="text-muted-foreground text-xs">
                       {formatDay(p.date, "EEE d MMM")} · {PAYMENT_METHOD_LABELS[p.paymentMethod]} · {formatCode("payment", p.code)}
                     </p>
@@ -238,19 +247,32 @@ function Kpi({
   label,
   value,
   detail,
-  tone,
   small,
+  onPlate,
+  divided,
 }: {
   label: string;
   value: React.ReactNode;
   detail?: string;
-  tone?: "owed";
   small?: boolean;
+  /** Grabado en la placa de plata: número grande, rótulo en mayúsculas. */
+  onPlate?: boolean;
+  /** Línea a la izquierda (segundo dato de la misma tarjeta). */
+  divided?: boolean;
 }) {
   return (
-    <div className={cn("bg-card shadow-toga space-y-1 rounded-2xl p-4", tone === "owed" && "ring-destructive/25 ring-1")}>
-      <p className="text-muted-foreground text-xs">{label}</p>
-      <p className={cn("leading-tight font-bold tabular-nums", small ? "truncate text-base" : "text-xl")}>{value}</p>
+    <div className={cn("min-w-0 space-y-1 px-4 py-3", divided && (onPlate ? "plate-rule border-l" : "border-l"))}>
+      <p className={cn(onPlate ? "text-plata-ink/70 text-[0.625rem] font-bold tracking-[0.1em] uppercase" : "text-muted-foreground text-xs")}>
+        {label}
+      </p>
+      <p
+        className={cn(
+          "leading-tight tabular-nums",
+          onPlate ? "font-heading truncate text-[clamp(1.25rem,6.2vw,1.75rem)]" : small ? "truncate text-base font-bold" : "text-xl font-bold",
+        )}
+      >
+        {value}
+      </p>
       {detail && <p className="text-muted-foreground text-sm tabular-nums">{detail}</p>}
     </div>
   );

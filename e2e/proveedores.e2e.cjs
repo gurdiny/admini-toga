@@ -1,5 +1,5 @@
 const { chromium } = require("playwright-core");
-const { CHROME, B, shots, log } = require("./config.cjs");
+const { CHROME, B, shots, log, sql } = require("./config.cjs");
 const balance = async (page) => (await page.locator("#saldo + span").innerText()).trim();
 
 /** Cuántos pagos se pueden editar/borrar: todos tienen menú (Ver detalle), no todos tienen «Borrar». */
@@ -98,8 +98,17 @@ async function editablePayments(page) {
     await page.getByRole("link", { name: /Platería Taxco Hernández/ }).click();
     await page.getByRole("heading", { name: "Platería Taxco Hernández" }).waitFor();
     const staffView = await editablePayments(page);
-    // Los 2 que capturó hoy sí; los del dueño o de otros días, no (la cantidad total depende de los datos).
-    log(staffView.editable >= 2 && staffView.editable < staffView.total, `Taxco: el Mostrador edita/borra solo lo suyo de hoy (${staffView.editable} de ${staffView.total}); todos tienen «Ver detalle»`);
+    // Solo lo que el mostrador capturó HOY (día de México); lo del dueño o de otros días, no.
+    // Se cuenta en la base: depende del día en que se cargó el seed.
+    const [{ mine }] = await sql(
+      `SELECT count(*)::int AS mine FROM supplier_payments p JOIN suppliers s ON s.id = p."supplierId" JOIN users u ON u.id = p."createdById"
+       WHERE s.name = 'Platería Taxco Hernández' AND p."deletedAt" IS NULL AND u.email = 'mostrador@joyeria.local'
+         AND (p."createdAt" AT TIME ZONE 'America/Mexico_City')::date = (now() AT TIME ZONE 'America/Mexico_City')::date`,
+    );
+    log(
+      staffView.editable === mine && staffView.editable < staffView.total,
+      `Taxco: el Mostrador edita/borra solo lo suyo de hoy (${staffView.editable} de ${staffView.total}, suyos de hoy: ${mine}); todos tienen «Ver detalle»`,
+    );
 
     // ── Dueño ──
     await page.goto(`${B}/api/dev/login?as=dueno@joyeria.local&next=/proveedores`);

@@ -2,14 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronRight, Search, Truck } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
+import { Monogram } from "@/components/monogram";
 import { PageHeader } from "@/components/page-header";
-import { formatPhone } from "@/components/phone-link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { canAdminister } from "@/lib/auth/permissions";
 import { requireUser } from "@/lib/auth/session";
 import { requireModule } from "@/lib/settings";
 import { formatCode } from "@/lib/codes";
+import { cn } from "@/lib/utils";
 import { BalanceText } from "@/modules/payments/components/balance-text";
 import { NewSupplierButton } from "@/modules/payments/components/new-supplier-button";
 import { getCaptureOptions, listSuppliers } from "@/modules/payments/queries";
@@ -78,20 +79,22 @@ export default async function SuppliersPage({ searchParams }: PageProps<"/provee
           {suppliers.map((s) => (
             <li key={s.id}>
               <Link href={`/proveedores/${s.id}`} className="hover:bg-muted/60 flex min-h-16 items-center gap-3 px-4 py-3">
+                <Monogram name={s.name} className={cn(!s.isActive && "opacity-50")} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-bold">
+                  {/* Nombres de negocio largos: hasta dos líneas antes de cortar. */}
+                  <p className="line-clamp-2 leading-snug font-bold">
                     {s.name}
                     {!s.isActive && <span className="text-muted-foreground font-normal"> · desactivado</span>}
                   </p>
-                  <p className="text-muted-foreground truncate text-sm">
+                  <p className="text-muted-foreground mt-0.5 truncate text-[0.8125rem]">
                     {formatCode("supplier", s.code)}
                     {s.categoryName && ` · ${s.categoryName}`}
                     {s.contactName && ` · ${s.contactName}`}
-                    {s.phone && ` · ${formatPhone(s.phone)}`}
                   </p>
                 </div>
-                <div className="text-right">
-                  <p className="text-muted-foreground text-xs">Le debes</p>
+                <div className="shrink-0 text-right">
+                  {/* «Le debes» solo donde hay saldo: «Al corriente» se explica solo. */}
+                  {Object.keys(s.balances).length > 0 && <p className="text-muted-foreground text-[0.6875rem]">Le debes</p>}
                   <BalanceText balances={s.balances} className="text-sm" />
                 </div>
                 <ChevronRight className="text-muted-foreground size-4 shrink-0" aria-hidden />

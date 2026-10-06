@@ -7,6 +7,8 @@ const { chromium } = require("playwright-core");
 const { CHROME, B, shots, log } = require("./config.cjs");
 
 const WIDTHS = [360, 375, 390, 600, 768, 1280];
+/** Día de hoy en México (yyyy-MM-dd). */
+const TODAY = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City" }).format(new Date());
 const PAGES = [
   ["inicio", "/"],
   ["recordatorios", "/recordatorios"],
@@ -42,7 +44,8 @@ const DIALOGS = [
     },
   ],
   ["nuevo-proveedor", "/proveedores", (p) => p.getByRole("button", { name: "Nuevo proveedor" }).locator("visible=true").first().click()],
-  ["detalle-pago", "/pagos", async (p) => {
+  // Rango amplio: «Esta semana» puede estar vacía (p. ej. un lunes) y no habría pago que abrir.
+  ["detalle-pago", `/pagos?rango=personalizado&desde=2020-01-01&hasta=${TODAY}`, async (p) => {
     await p.getByRole("button", { name: /Opciones de PAG-/ }).locator("visible=true").first().click();
     await p.getByRole("menuitem", { name: "Ver detalle" }).click();
   }],

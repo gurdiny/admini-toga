@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useOptimistic, useState, useTransition } from "react";
-import { CalendarClock, Check, ChevronRight, Clock, Hash, MessageCircle, Pencil, Phone, Trash2, Undo2 } from "lucide-react";
+import { CalendarClock, Check, ChevronRight, Clock, MessageCircle, Pencil, Phone, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { formatPhone } from "@/components/phone-link";
@@ -117,8 +117,10 @@ function ReminderCard({
   return (
     <li
       className={cn(
-        "bg-card shadow-toga flex items-start gap-3 rounded-2xl pt-3 pr-1 pl-3",
-        urgent && "ring-destructive/40 ring-1",
+        "bg-card shadow-toga relative flex items-start gap-3 overflow-hidden rounded-2xl pt-3 pr-1 pl-3 transition-opacity",
+        // Prioridad alta: franja a la izquierda, no un contorno (se lee de reojo en la lista).
+        urgent && "before:bg-destructive before:absolute before:inset-y-0 before:left-0 before:w-1",
+        done && "bg-card/70",
       )}
     >
       <ReminderCheckbox item={item} onToggle={onToggle} />
@@ -136,20 +138,23 @@ function ReminderCard({
           </span>
         </div>
         <ClientTags item={item} />
-        <p className={cn("line-clamp-2 text-sm whitespace-pre-line", done && "text-muted-foreground")}>{item.note}</p>
-        <WhenText item={item} showDate={showDate} />
+        <p className={cn("line-clamp-2 text-[0.9375rem] leading-snug whitespace-pre-line", done && "text-muted-foreground")}>{item.note}</p>
         {done && item.completedAtLabel && (
           <p className="text-toga-green-strong text-xs">
             Completado {item.completedAtLabel}
             {item.completedByName && ` por ${item.completedByName}`}
           </p>
         )}
-        <div className="flex flex-wrap items-center gap-x-1 gap-y-2 pb-2">
-          <Button type="button" variant="ghost" size="sm" className="text-toga-pink-strong -ml-3 font-bold" onClick={() => setViewing(true)}>
-            Ver detalle
-            <ChevronRight aria-hidden />
-          </Button>
-          {done && item.readyUrl && <ReadyButton url={item.readyUrl} size="sm" />}
+        {/* Cuándo y «Ver detalle» en la misma fila: una fila menos por tarjeta. */}
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 pb-1">
+          <WhenText item={item} showDate={showDate} />
+          <div className="-mr-1 ml-auto flex flex-wrap items-center justify-end gap-1">
+            {done && item.readyUrl && <ReadyButton url={item.readyUrl} size="sm" />}
+            <Button type="button" variant="ghost" size="sm" className="text-toga-pink-strong px-2 font-bold" onClick={() => setViewing(true)}>
+              Ver detalle
+              <ChevronRight aria-hidden />
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -209,11 +214,16 @@ function ReminderCheckbox({ item, onToggle }: { item: ReminderRow; onToggle: (co
       aria-label={`${done ? "Desmarcar" : "Marcar como completado"}: ${item.client.name}`}
       onClick={() => onToggle(!done)}
       className={cn(
-        "flex size-11 shrink-0 items-center justify-center rounded-xl border-2 transition-colors active:scale-95",
-        done ? "border-toga-green-strong bg-toga-green-strong text-white" : "border-input bg-background hover:border-toga-green",
+        "group flex size-11 shrink-0 items-center justify-center rounded-full border-2 transition-[background-color,border-color,transform] duration-200 active:scale-90",
+        done ? "border-toga-green-strong bg-toga-green-strong text-white" : "border-plata-edge bg-background hover:border-toga-green",
       )}
     >
-      <Check className={cn("size-6", !done && "opacity-0")} strokeWidth={3} aria-hidden />
+      {done ? (
+        <Check className="animate-check-pop size-6" strokeWidth={3} aria-hidden />
+      ) : (
+        // Sugerencia de la palomita al pasar el dedo/ratón.
+        <Check className="text-toga-green size-5 opacity-0 transition-opacity group-hover:opacity-60" strokeWidth={3} aria-hidden />
+      )}
     </button>
   );
 }
@@ -221,8 +231,7 @@ function ReminderCheckbox({ item, onToggle }: { item: ReminderRow; onToggle: (co
 function ClientTags({ item }: { item: ReminderRow }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <span className="bg-muted inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-bold">
-        <Hash className="size-3" aria-hidden />
+      <span className="stamp" title="Folio del cliente">
         {formatCode("client", item.client.code)}
       </span>
       {item.client.phone && (
@@ -231,11 +240,11 @@ function ClientTags({ item }: { item: ReminderRow }) {
           target="_blank"
           rel="noopener noreferrer"
           aria-label={`WhatsApp a ${item.client.name}: ${formatPhone(item.client.phone)}`}
-          // El chip se ve de 32 px, pero el área que se toca mide 40.
-          className="-my-1 inline-flex h-10 items-center"
+          // El chip se ve de 24 px, pero el área que se toca mide 40.
+          className="-my-2 inline-flex h-10 items-center"
         >
-          <span className="bg-toga-green-soft text-toga-green-strong inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-bold">
-            <MessageCircle className="size-3.5" aria-hidden />
+          <span className="bg-toga-green-soft text-toga-green-strong inline-flex h-6 items-center gap-1 rounded-md px-2 text-[0.6875rem] font-bold tabular-nums">
+            <MessageCircle className="size-3" aria-hidden />
             {formatPhone(item.client.phone)}
           </span>
         </a>
@@ -247,8 +256,8 @@ function ClientTags({ item }: { item: ReminderRow }) {
 function WhenText({ item, showDate }: { item: ReminderRow; showDate?: boolean }) {
   if (!item.targetTime && !showDate) return null;
   return (
-    <p className="text-muted-foreground flex items-center gap-1 text-xs">
-      <Clock className="size-3.5" aria-hidden />
+    <p className="text-muted-foreground flex min-w-0 items-center gap-1 text-xs">
+      <Clock className="size-3.5 shrink-0" aria-hidden />
       {showDate && <span className="first-letter:uppercase">{formatDay(item.targetDate, "EEE d MMM")}</span>}
       {showDate && item.targetTime && " · "}
       {item.targetTime && `antes de las ${item.targetTime}`}
