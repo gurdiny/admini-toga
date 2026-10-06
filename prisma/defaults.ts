@@ -1,7 +1,8 @@
-// Catálogos y configuración con los que arranca una base nueva. Los usan el
+// Catálogos con los que arranca una base nueva. Las categorías las usan el
 // seed de desarrollo (prisma/seed.ts) y la instalación en producción
-// (prisma/setup.ts). Después se administran desde /admin: nada de esto se
-// vuelve a imponer sobre lo que el dueño haya cambiado.
+// (prisma/setup.ts); la configuración solo el seed (en producción la app usa
+// los valores por defecto de src/lib/settings.ts hasta que se guarde en
+// /admin/configuracion). Después todo se administra desde /admin.
 import type { Prisma } from "../src/generated/prisma/client";
 import { DEFAULT_READY_MESSAGE } from "../src/modules/reminders/whatsapp";
 

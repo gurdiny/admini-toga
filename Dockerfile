@@ -20,14 +20,15 @@ RUN npm ci --no-audit --no-fund
 
 # ─── 2. Compilación ───────────────────────────────────────────────────────
 FROM deps AS builder
-# Better Auth se inicializa al recolectar las páginas y sin secreto llena el log
-# de errores. Este valor de relleno vive SOLO en esta etapa: la imagen final no
-# lo hereda y la app no arranca sin el BETTER_AUTH_SECRET real (src/lib/env.ts).
-ENV NEXT_TELEMETRY_DISABLED=1 \
-    BETTER_AUTH_SECRET="solo-para-compilar-no-se-usa-en-la-imagen-final" \
-    BETTER_AUTH_URL="http://localhost:3000"
+ENV NEXT_TELEMETRY_DISABLED=1
 COPY . .
-RUN npm run build
+# Better Auth se inicializa al recolectar las páginas y sin secreto llena el log
+# de errores. Valor de relleno solo para este comando: no es variable de la
+# imagen y esta etapa no se publica. La app no arranca sin el secreto real
+# (src/lib/env.ts).
+RUN BETTER_AUTH_SECRET="solo-para-compilar-no-se-usa-en-la-imagen-final" \
+    BETTER_AUTH_URL="http://localhost:3000" \
+    npm run build
 # Script de instalación (dueño + catálogos) en un solo archivo: la imagen final
 # no trae tsx ni el código fuente.
 RUN npx esbuild prisma/setup.ts --bundle --platform=node --format=esm --target=node24 \

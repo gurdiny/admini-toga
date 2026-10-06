@@ -12,6 +12,10 @@
 services:
   toga-app:
     image: ghcr.io/gurdiny/admini-toga:${TOGA_IMAGE_TAG}
+    # La imagen es privada: la descarga root en el VPS con su token de solo
+    # lectura (docker pull). Easypanel nunca la baja por su cuenta, solo usa
+    # la que ya está en el servidor.
+    pull_policy: never
     container_name: toga-app
     restart: unless-stopped
     depends_on:

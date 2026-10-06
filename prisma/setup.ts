@@ -1,63 +1,49 @@
 // Instalación en producción (base vacía) y rescate del dueño.
 //
-//   docker exec -it toga-app node setup.mjs                  # pregunta nombre, correo y contraseña
+//   docker exec -it toga-app node setup.mjs                  # pregunta nombre y correo
 //   docker exec -it toga-app node setup.mjs --email gera@toga.mx --name "Gera Urias"
 //
-// - Carga las categorías y la configuración base si no existen (no pisa lo
-//   que el dueño haya cambiado en /admin). Sin datos de ejemplo.
+// - Carga las categorías base si no existen (no pisa lo que el dueño haya
+//   cambiado en /admin). Nada de datos de negocio: cero proveedores, pagos,
+//   clientes y recordatorios. La configuración no necesita registros: la app
+//   usa sus valores por defecto (src/lib/settings.ts) hasta que se guarde en
+//   /admin/configuracion.
 // - Crea el usuario OWNER. Si el correo ya existe, lo deja como OWNER activo,
-//   le pone la contraseña nueva y cierra sus sesiones (sirve para recuperar
-//   el acceso si el dueño olvidó su contraseña).
-// - La contraseña se pide sin mostrarse; para pruebas automáticas se puede
-//   pasar en SETUP_PASSWORD.
+//   le pone una contraseña nueva y cierra sus sesiones (para recuperar el
+//   acceso si el dueño olvidó su contraseña).
+// - La contraseña la GENERA el script y se imprime UNA sola vez en la terminal.
+//   No se guarda en archivos, logs ni variables de entorno, ni en la auditoría
+//   (solo el hash en Account.password, como cualquier usuario). Por eso se
+//   niega a correr si la salida no es una terminal (p. ej. `> archivo`):
+//   con `docker exec -it` la salida va a tu pantalla, no a `docker logs`.
 //
 // En la imagen de Docker va empaquetado como /app/setup.mjs (ver Dockerfile).
 // En local: npx tsx --conditions=react-server prisma/setup.ts
 import "dotenv/config";
 import { createInterface } from "node:readline/promises";
-import { Writable } from "node:stream";
 import { parseArgs } from "node:util";
 import { hashPassword } from "better-auth/crypto";
 import { recordAudit } from "../src/lib/audit";
 import { db } from "../src/lib/db";
+import { generatePassword } from "../src/lib/generate-password";
 import { toNameKey } from "../src/lib/normalize";
-import { DEFAULT_SETTINGS, PAYMENT_CATEGORIES, SUPPLIER_CATEGORIES } from "./defaults";
+import { PAYMENT_CATEGORIES, SUPPLIER_CATEGORIES } from "./defaults";
 
-const MIN_PASSWORD = 8; // igual que Better Auth (src/lib/auth/config.ts)
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Pregunta en la terminal; con `hidden` no se ve lo que se escribe. */
-async function ask(question: string, hidden = false): Promise<string> {
-  let muted = false;
-  const output = new Writable({
-    write(chunk, _encoding, done) {
-      if (!muted) process.stdout.write(chunk);
-      done();
-    },
-  });
-  const rl = createInterface({ input: process.stdin, output, terminal: true });
-  const answer = rl.question(question);
-  muted = hidden;
-  const value = await answer;
+async function ask(question: string): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const value = await rl.question(question);
   rl.close();
-  if (hidden) process.stdout.write("\n");
   return value.trim();
 }
 
-async function askPassword(): Promise<string> {
-  if (process.env.SETUP_PASSWORD) return process.env.SETUP_PASSWORD;
-  for (;;) {
-    const password = await ask(`Contraseña (mínimo ${MIN_PASSWORD} caracteres): `, true);
-    if (password.length < MIN_PASSWORD) {
-      console.log(`  Muy corta. Usa al menos ${MIN_PASSWORD} caracteres.`);
-      continue;
-    }
-    if ((await ask("Repite la contraseña: ", true)) === password) return password;
-    console.log("  No coinciden. Intenta de nuevo.");
-  }
-}
-
-async function loadCatalogs() {
+/**
+ * Categorías base. Las de pago son indispensables: cada pago exige una
+ * (SupplierPayment.categoryId es obligatorio). Las de proveedor son opcionales
+ * en el formulario, pero son la clasificación del negocio (joyería / mano de obra).
+ */
+async function loadCategories() {
   let created = 0;
   const categories = [
     ...PAYMENT_CATEGORIES.map(([name, color], i) => ({ name, color, sortOrder: i, type: "PAYMENT" as const })),
@@ -71,19 +57,13 @@ async function loadCatalogs() {
       created++;
     }
   }
-  for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
-    const exists = await db.appSetting.findUnique({ where: { key } });
-    if (!exists) {
-      await db.appSetting.create({ data: { key, value } });
-      created++;
-    }
-  }
-  console.log(created ? `✓ Catálogos base: ${created} registros nuevos.` : "✓ Catálogos base: ya estaban.");
+  console.log(created ? `✓ Categorías base: ${created} nuevas.` : "✓ Categorías base: ya estaban.");
 }
 
-async function upsertOwner(name: string, email: string, password: string) {
+/** Crea al dueño o le pone una contraseña nueva. Devuelve si ya existía. */
+async function upsertOwner(name: string, email: string, password: string): Promise<boolean> {
   const hash = await hashPassword(password);
-  await db.$transaction(async (tx) => {
+  return db.$transaction(async (tx) => {
     const existing = await tx.user.findUnique({ where: { email } });
     if (existing) {
       const user = await tx.user.update({ where: { id: existing.id }, data: { name, role: "OWNER", isActive: true } });
@@ -91,7 +71,7 @@ async function upsertOwner(name: string, email: string, password: string) {
       if (account) await tx.account.update({ where: { id: account.id }, data: { password: hash } });
       else await tx.account.create({ data: { userId: user.id, accountId: user.id, providerId: "credential", password: hash } });
       await tx.session.deleteMany({ where: { userId: user.id } });
-      // Solo queda constancia de que cambió, nunca el hash.
+      // Solo queda constancia de que cambió, nunca la contraseña ni el hash.
       await recordAudit(tx, {
         userId: user.id,
         action: "UPDATE",
@@ -99,27 +79,49 @@ async function upsertOwner(name: string, email: string, password: string) {
         before: { ...existing, password: "anterior" },
         after: { ...user, password: "cambiada" },
       });
-      console.log(`✓ ${email} ya existía: ahora es dueño activo con la contraseña nueva. Sus sesiones se cerraron.`);
-      return;
+      return true;
     }
     const user = await tx.user.create({ data: { name, email, role: "OWNER", emailVerified: true } });
     await tx.account.create({ data: { userId: user.id, accountId: user.id, providerId: "credential", password: hash } });
     await recordAudit(tx, { userId: user.id, action: "CREATE", entity: "User", after: user });
-    console.log(`✓ Dueño creado: ${name} <${email}>.`);
+    return false;
   });
 }
 
 async function main() {
+  if (!process.stdout.isTTY) {
+    throw new Error("La contraseña solo se muestra en una terminal. Corre: docker exec -it toga-app node setup.mjs (sin redirigir la salida).");
+  }
   const { values } = parseArgs({ options: { email: { type: "string" }, name: { type: "string" } } });
-  console.log("Instalación de TOGA: catálogos base y usuario dueño.\n");
-  await loadCatalogs();
+  console.log("Instalación de TOGA: categorías base y usuario dueño.\n");
+  await loadCategories();
 
   const name = values.name?.trim() || (await ask("Nombre del dueño: "));
   const email = (values.email?.trim() || (await ask("Correo para entrar: "))).toLowerCase();
   if (!name) throw new Error("Falta el nombre.");
   if (!EMAIL.test(email)) throw new Error(`«${email}» no parece un correo válido.`);
-  await upsertOwner(name, email, await askPassword());
-  console.log("\nListo. Entra a la app con ese correo; al personal del mostrador se le da de alta en Admin → Usuarios.");
+
+  const password = generatePassword();
+  const existed = await upsertOwner(name, email, password);
+  console.log(
+    existed
+      ? `✓ ${email} ya existía: ahora es dueño activo con una contraseña nueva y sus sesiones se cerraron.`
+      : `✓ Dueño creado: ${name} <${email}>.`,
+  );
+  // Única vez que se muestra. Solo va a esta terminal.
+  process.stdout.write(
+    [
+      "",
+      "  ┌──────────────────────────────────────────────┐",
+      `  │  Contraseña: ${password.padEnd(32)}│`,
+      "  └──────────────────────────────────────────────┘",
+      "  Guárdala ahora en tu gestor de contraseñas: no se vuelve a mostrar.",
+      "  Si se pierde, corre este comando otra vez con el mismo correo.",
+      "",
+      "Al personal del mostrador se le da de alta en la app: Admin → Usuarios.",
+      "",
+    ].join("\n"),
+  );
 }
 
 main()

@@ -6,8 +6,8 @@ Cómo poner TOGA en producción en el VPS, actualizarlo, respaldarlo y restaurar
 
 ```
 GitHub (push a main)
-  └─ Actions: lint + tipos + pruebas → compila la imagen → ghcr.io/gurdiny/admini-toga
-                                                              │ (el VPS solo descarga)
+  └─ Actions: lint + tipos + pruebas → compila la imagen → ghcr.io/gurdiny/admini-toga (privada)
+                                                              │ root la descarga con un token read:packages
 VPS 62.169.22.35 ─ Easypanel ─ servicio Compose «toga»        ▼
   ├─ toga-app   Next.js (imagen de ghcr.io), puerto 3000 interno
   │              al arrancar: prisma migrate deploy → node server.js
@@ -41,23 +41,45 @@ cron `/root/backup-diario.sh` de las 3:30 y el firewall (solo 22/80/443 abiertos
 
 ## 1. Primer deploy
 
-### 1.1 La imagen en GitHub (una sola vez)
+### 1.1 La imagen privada en GitHub (una sola vez)
 
 1. Haz push a `main`. En GitHub → **Actions** → «Imagen Docker» espera a que salga en verde
-   (primero corre lint, tipos y pruebas; luego compila).
-2. La primera vez la imagen queda **privada**. Hazla pública para que el VPS la descargue sin contraseña
-   (el código ya es público y la imagen no lleva secretos):
-   GitHub → tu perfil → **Packages** → `admini-toga` → **Package settings** → *Change visibility* → **Public**.
-3. Prueba desde el VPS: `docker pull ghcr.io/gurdiny/admini-toga:latest`.
+   (primero corre lint, tipos y pruebas; luego compila y publica).
+2. **Imagen privada**: GitHub → tu perfil → **Packages** → `admini-toga` → **Package settings** →
+   *Danger zone* → *Change visibility* → **Private**. (Actions sigue publicando igual.)
+   Comprueba que ya no se puede bajar sin credenciales (debe decir **401**):
 
-> Si prefieres dejarla privada: en el VPS, `docker login ghcr.io -u gurdiny` con un token de GitHub
-> (classic) que solo tenga el permiso `read:packages`.
+   ```bash
+   T=$(curl -s "https://ghcr.io/token?scope=repository:gurdiny/admini-toga:pull" | sed -E 's/.*"token":"([^"]*)".*/\1/')
+   curl -s -o /dev/null -w "%{http_code}\n" -H "Authorization: Bearer $T" \
+     -H "Accept: application/vnd.oci.image.index.v1+json" https://ghcr.io/v2/gurdiny/admini-toga/manifests/latest
+   ```
+
+3. **Token de solo lectura para el VPS**: GitHub → *Settings* → *Developer settings* → *Personal access
+   tokens* → **Tokens (classic)** → *Generate new token (classic)*. Nombre `vps-toga-pull`, marca
+   **solo `read:packages`** y ponle vencimiento (p. ej. 1 año; anota la fecha: cuando venza, el
+   `docker pull` dirá `unauthorized`). GitHub Container Registry no acepta los tokens *fine-grained*.
+4. **En el VPS, como root** (el token no queda en el historial ni en variables):
+
+   ```bash
+   read -rsp "Token: " GHCR_TOKEN; echo
+   printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u gurdiny --password-stdin
+   unset GHCR_TOKEN
+   chmod 600 /root/.docker/config.json
+   stat -c '%a %U %n' /root/.docker/config.json     # → 600 root /root/.docker/config.json
+   docker pull ghcr.io/gurdiny/admini-toga:latest
+   ```
+
+   Docker guarda el token en `config.json` sin cifrar (por eso el aviso «stored unencrypted» y el
+   permiso 600: solo root lo lee). Con `read:packages` lo único que permite es descargar imágenes.
+
+El compose lleva `pull_policy: never`: **Easypanel nunca descarga la imagen**, solo usa la que bajó root
+con `docker pull`. Por eso cada Deploy va precedido de un `docker pull` (ver «Actualizar»).
 
 ### 1.2 DNS en Cloudflare
 
-Registro **A** `admin` → `62.169.22.35`, igual que `supabase.toga.mx`. Si al emitir el certificado
-Traefik no lo logra, deja la nube en gris (*DNS only*) hasta que tenga el certificado y luego regrésala
-como la tengas en `supabase`.
+Registro **A** `admin` → `62.169.22.35` (listo). Si al emitir el certificado Traefik no lo logra, deja la
+nube en gris (*DNS only*) hasta que tenga el certificado y luego regrésala como la tengas en `supabase`.
 
 ### 1.3 Archivos en el VPS
 
@@ -85,7 +107,9 @@ conectar a la base, y si cambia `BETTER_AUTH_SECRET` todos tienen que volver a i
    `render.sh` en el editor del compose y guarda. **Todavía no le des Deploy.**
 2. **Dominio**: pestaña *Domains* del servicio → *Add domain* → host `admin.toga.mx`, HTTPS activado,
    servicio **`toga-app`**, puerto **3000**.
-3. **Deploy**.
+3. Confirma que la imagen ya está en el servidor: `docker image ls ghcr.io/gurdiny/admini-toga`
+   (si no, `docker pull ghcr.io/gurdiny/admini-toga:latest`).
+4. **Deploy**.
 
 ### 1.5 Verificar
 
@@ -105,11 +129,20 @@ lista que sigue dice qué falta: corrige `.env.production`, vuelve a correr `ren
 docker exec -it toga-app node setup.mjs
 ```
 
-Pide nombre, correo y contraseña (no se ve al escribirla) y carga las categorías y la configuración base
-(sin datos de ejemplo). Después entra a `https://admin.toga.mx` y da de alta al mostrador en
-**Admin → Usuarios**.
+Pide nombre y correo, **genera la contraseña** y la imprime **una sola vez** en tu terminal (cuatro
+grupos de minúsculas y números, fácil de escribir en el iPhone). Guárdala en ese momento en tu gestor de
+contraseñas. No queda en archivos, logs (`docker logs` no ve la salida de `docker exec`), variables de
+entorno ni en la auditoría; en la base solo queda su hash, como la de cualquier usuario. Si la salida no
+es una terminal (por ejemplo `> archivo`), el script se niega a correr.
 
-> **¿El dueño olvidó su contraseña?** El mismo comando con su correo le pone una nueva, lo deja como dueño
+También carga las **categorías base** (8 de pago y 2 de proveedor). La base queda sin datos de negocio:
+cero proveedores, pagos, clientes y recordatorios. La configuración usa sus valores por defecto hasta que
+la guardes en **Admin → Configuración**.
+
+Después entra a `https://admin.toga.mx` y da de alta al mostrador en **Admin → Usuarios**
+(«Nuevo usuario», rol Mostrador, con la contraseña que tú le pongas).
+
+> **¿El dueño olvidó su contraseña?** El mismo comando con su correo genera una nueva, lo deja como dueño
 > activo y cierra sus sesiones: `docker exec -it toga-app node setup.mjs --email gera@toga.mx --name "Gera"`.
 
 ## 2. Respaldos
@@ -179,7 +212,8 @@ npm run backup:test -- backups/joyeria_….dump   # restaura en una base tempora
 ## 3. Actualizar
 
 1. Push a `main` y espera el ✓ verde en GitHub Actions (si las pruebas fallan, no se publica imagen).
-2. En el VPS: `docker pull ghcr.io/gurdiny/admini-toga:latest`
+2. En el VPS, como root: `docker pull ghcr.io/gurdiny/admini-toga:latest` (obligatorio: Easypanel no
+   descarga la imagen, `pull_policy: never`).
 3. En Easypanel: **Deploy** del servicio `toga`. Las migraciones nuevas se aplican solas al arrancar.
 4. Verifica: `curl -s https://admin.toga.mx/api/health` y `docker logs --tail 30 toga-app`.
 
@@ -191,8 +225,9 @@ Si cambias algo de `.env.production` o del compose: `cd /opt/toga-app/repo && gi
 
 ### Regresar a una versión anterior
 
-Cada commit publica también la etiqueta `sha-abc1234` (la ves en GitHub → Packages). En
-`.env.production` pon `TOGA_IMAGE_TAG=sha-abc1234`, corre `render.sh`, pega y Deploy. Ojo: las
+Cada commit publica también la etiqueta `sha-abc1234` (la ves en GitHub → Packages).
+`docker pull ghcr.io/gurdiny/admini-toga:sha-abc1234`, en `.env.production` pon
+`TOGA_IMAGE_TAG=sha-abc1234`, corre `render.sh`, pega y Deploy. Ojo: las
 migraciones no se deshacen solas; si la versión nueva cambió la base, restaura el respaldo previo.
 
 ## 4. Rutina
