@@ -7,8 +7,8 @@ import { hashPassword } from "better-auth/crypto";
 import { db } from "../src/lib/db";
 import { addDays, dayToDb, getToday } from "../src/lib/date";
 import { normalizePhoneMX, toNameKey } from "../src/lib/normalize";
-import { DEFAULT_READY_MESSAGE } from "../src/modules/reminders/whatsapp";
 import { Prisma } from "../src/generated/prisma/client";
+import { DEFAULT_SETTINGS, PAYMENT_CATEGORIES, SUPPLIER_CATEGORIES } from "./defaults";
 
 // Contraseña de los usuarios de ejemplo. Solo para desarrollo.
 const DEV_PASSWORD = process.env.SEED_PASSWORD ?? "joyeria-dev-2026";
@@ -60,29 +60,12 @@ async function main() {
   const staff = await upsertUser("mostrador@joyeria.local", "Mostrador", "STAFF");
 
   // ─── Categorías ────────────────────────────────────────────────────────
-  // TOGA solo vende plata .925. De pago: qué se compró o qué trabajo se pagó.
-  // De proveedor: si entrega piezas terminadas o hace mano de obra.
-  const paymentCategories = [
-    ["Anillos", "#c23d73"],
-    ["Aretes", "#d67da1"],
-    ["Pulseras", "#6671ba"],
-    ["Cadenas", "#6a5acd"],
-    ["Collares", "#4f6b24"],
-    ["Dijes", "#90ac53"],
-    ["Mano de obra", "#aa3a3e"],
-    ["Otros", "#737373"],
-  ] as const;
   const payCat: Record<string, string> = {};
-  for (const [i, [name, color]] of paymentCategories.entries()) {
+  for (const [i, [name, color]] of PAYMENT_CATEGORIES.entries()) {
     payCat[name] = (await upsertCategory(name, "PAYMENT", color, i)).id;
   }
-
-  const supplierCategories = [
-    ["Joyería", "#c23d73"],
-    ["Mano de obra", "#aa3a3e"],
-  ] as const;
   const supCat: Record<string, string> = {};
-  for (const [i, [name, color]] of supplierCategories.entries()) {
+  for (const [i, [name, color]] of SUPPLIER_CATEGORIES.entries()) {
     supCat[name] = (await upsertCategory(name, "SUPPLIER", color, i)).id;
   }
 
@@ -111,15 +94,7 @@ async function main() {
   }
 
   // ─── Configuración ─────────────────────────────────────────────────────
-  const settings: Record<string, Prisma.InputJsonValue> = {
-    businessName: "TOGA Plata .925",
-    defaultCurrency: "MXN",
-    defaultPaymentMethod: "EFECTIVO", // casi todos los pagos son en efectivo
-    overdueLookbackDays: 30,
-    readyMessage: DEFAULT_READY_MESSAGE, // aviso por WhatsApp de pedido listo
-    modules: { payments: true, reminders: true },
-  };
-  for (const [key, value] of Object.entries(settings)) {
+  for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
     await db.appSetting.upsert({ where: { key }, update: {}, create: { key, value } });
   }
 
@@ -218,7 +193,7 @@ async function main() {
   }
 
   console.log(
-    `Seed listo: 2 usuarios, ${paymentCategories.length + supplierCategories.length} categorías, ` +
+    `Seed listo: 2 usuarios, ${PAYMENT_CATEGORIES.length + SUPPLIER_CATEGORIES.length} categorías, ` +
       `${suppliers.length} proveedores, ${clients.length} clientes, ${reminders.length} pedidos, ` +
       `${debts.length} adeudos, ${payments.length} pagos.`,
   );

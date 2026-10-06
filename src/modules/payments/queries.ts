@@ -1,8 +1,9 @@
 import "server-only";
 import { db } from "@/lib/db";
 import { dbToDay, dayRangeWhere, formatDay, formatForDisplay, type DayKey, type DayRange } from "@/lib/date";
-import { moneyToString, toDecimal, toMXN, ZERO, type Decimal } from "@/lib/money";
+import { moneyToString, toMXN, ZERO, type Decimal } from "@/lib/money";
 import { toNameKey } from "@/lib/normalize";
+import { summarizePayments, supplierBalances, totalBalances, type Balances, type BreakdownRow } from "./aggregate";
 import { parseCode } from "@/lib/codes";
 import { getSettings } from "@/lib/settings";
 import type { PaymentMethod, Prisma } from "@/generated/prisma/client";
@@ -10,18 +11,7 @@ import type { PaymentMethod, Prisma } from "@/generated/prisma/client";
 // Todo lo que sale de aquí es serializable (montos como string "1250.00",
 // días como "yyyy-MM-dd") para poder pasarlo a Client Components.
 
-/** Saldos por moneda: { MXN: "14299.50" }. Normalmente solo MXN. */
-export type Balances = Record<string, string>;
-
-function addTo(map: Map<string, Decimal>, key: string, amount: Decimal) {
-  map.set(key, (map.get(key) ?? ZERO).add(amount));
-}
-
-function toBalances(map: Map<string, Decimal>): Balances {
-  const out: Balances = {};
-  for (const [currency, amount] of map) if (!amount.isZero()) out[currency] = moneyToString(amount);
-  return out;
-}
+export type { Balances, BreakdownRow } from "./aggregate";
 
 // ─── Saldos ────────────────────────────────────────────────────────────────
 
@@ -44,17 +34,10 @@ export async function getSupplierBalances(supplierIds?: string[]): Promise<Map<s
     }),
   ]);
 
-  const bySupplier = new Map<string, Map<string, Decimal>>();
-  const bucket = (id: string) => bySupplier.get(id) ?? bySupplier.set(id, new Map()).get(id)!;
-  for (const row of debts) addTo(bucket(row.supplierId), row.currency, row._sum.amount ?? ZERO);
-  for (const row of paid) addTo(bucket(row.supplierId), row.currency, (row._sum.amount ?? ZERO).neg());
-
-  const result = new Map<string, Balances>();
-  for (const [id, map] of bySupplier) {
-    const balances = toBalances(map);
-    if (Object.keys(balances).length) result.set(id, balances);
-  }
-  return result;
+  return supplierBalances(
+    debts.map((row) => ({ supplierId: row.supplierId, currency: row.currency, amount: row._sum.amount })),
+    paid.map((row) => ({ supplierId: row.supplierId, currency: row.currency, amount: row._sum.amount })),
+  );
 }
 
 export type DebtSummary = {
@@ -285,7 +268,7 @@ export async function getSupplierStatement(supplierId: string): Promise<Statemen
 
   const running = new Map<string, Decimal>();
   return raw.map(({ sortDate: _d, sortCreated: _c, delta, ...entry }) => {
-    addTo(running, entry.currency, delta);
+    running.set(entry.currency, (running.get(entry.currency) ?? ZERO).add(delta));
     return { ...entry, balanceAfter: moneyToString(running.get(entry.currency) ?? ZERO) };
   });
 }
@@ -517,8 +500,6 @@ export async function getPaymentsForExport(filters: Omit<PaymentFilters, "page">
   }));
 }
 
-export type BreakdownRow = { id: string; name: string; color?: string; total: string; count: number };
-
 export type PaymentsSummary = {
   /** Total pagado en el rango, en pesos (otras monedas × tipo de cambio). */
   totalPaid: string;
@@ -546,42 +527,7 @@ export async function getPaymentsSummary(range: DayRange): Promise<PaymentsSumma
     getSupplierBalances(),
   ]);
 
-  let total = ZERO;
-  const bySupplier = new Map<string, BreakdownRow & { sum: Decimal }>();
-  const byCategory = new Map<string, BreakdownRow & { sum: Decimal }>();
-  for (const p of payments) {
-    const mxn = toMXN(p);
-    total = total.add(mxn);
-    for (const [map, item] of [
-      [bySupplier, p.supplier],
-      [byCategory, p.category],
-    ] as const) {
-      const row = map.get(item.id) ?? { ...item, total: "0", count: 0, sum: ZERO };
-      row.sum = row.sum.add(mxn);
-      row.count += 1;
-      map.set(item.id, row);
-    }
-  }
-
-  const finish = (map: Map<string, BreakdownRow & { sum: Decimal }>) =>
-    [...map.values()]
-      .sort((a, b) => b.sum.comparedTo(a.sum))
-      .map(({ sum, ...row }) => ({ ...row, total: moneyToString(sum) }));
-
-  const owed = new Map<string, Decimal>();
-  for (const supplierBalances of balances.values()) {
-    for (const [currency, amount] of Object.entries(supplierBalances)) addTo(owed, currency, toDecimal(amount));
-  }
-
-  const suppliers = finish(bySupplier);
-  return {
-    totalPaid: moneyToString(total),
-    count: payments.length,
-    topSupplier: suppliers[0] ? { name: suppliers[0].name, total: suppliers[0].total } : null,
-    bySupplier: suppliers,
-    byCategory: finish(byCategory),
-    totalOwed: toBalances(owed),
-  };
+  return { ...summarizePayments(payments), totalOwed: totalBalances(balances.values()) };
 }
 
 // ─── Opciones para formularios ─────────────────────────────────────────────

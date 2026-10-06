@@ -34,6 +34,9 @@ npm run dev                       # http://localhost:3000
 | `npm run db:generate` | Regenera el cliente de Prisma tras cambiar el esquema |
 | `npm run db:seed` | Carga datos de ejemplo |
 | `npm run db:studio` | Explorador visual de la base |
+| `npm test` | Pruebas (Vitest) |
+| `npm run backup` | Respaldo de la base local en `backups/` |
+| `npm run backup:test -- backups/<archivo>.dump` | Restaura un respaldo en una base temporal y compara |
 
 Para borrar por completo la base local: `docker compose down -v`.
 
@@ -42,7 +45,7 @@ Para borrar por completo la base local: `docker compose down -v`.
 ```
 src/
   app/              rutas (App Router)
-  modules/          un directorio por dominio: payments, reminders, admin
+  modules/          un directorio por dominio: payments, reminders, clients, search, admin
   lib/              utilidades compartidas (db, fechas, dinero, auth)
   components/ui/    componentes de shadcn/ui
   generated/prisma/ cliente de Prisma (generado, no se versiona)
@@ -50,8 +53,16 @@ prisma/
   schema.prisma     modelos
   migrations/       historial de migraciones
   seed.ts           datos de ejemplo
+  setup.ts          instalación en producción: catálogos base + usuario dueño
+deploy/             compose de Easypanel, respaldo y restauración
+Dockerfile          imagen de producción (la compila GitHub Actions)
 ```
 
 ## Producción
 
-Se despliega con Docker en un VPS propio (app + PostgreSQL + Caddy). Instrucciones de deploy, respaldo y restauración: Fase 8.
+Docker en el VPS propio, administrado con **Easypanel** (detrás de su Traefik), con PostgreSQL 17 propio sin puertos publicados. GitHub Actions compila la imagen y la publica en `ghcr.io/gurdiny/admini-toga`; el VPS solo la descarga.
+
+Paso a paso (primer deploy, crear al dueño, actualizar, respaldos diarios a Google Drive y restauración): **[docs/DEPLOY.md](docs/DEPLOY.md)**.
+
+- Estado: `https://admin.toga.mx/api/health`
+- Si faltan variables de entorno, la app no arranca y lo dice en el log del contenedor.

@@ -21,6 +21,7 @@ const PAGES = [
   ["admin-auditoria", "/admin/auditoria"],
   ["admin-configuracion", "/admin/configuracion"],
   ["admin-papelera", "/admin/papelera"],
+  ["404", "/esta-pagina-no-existe"],
 ];
 // Diálogos: [nombre, ruta, cómo abrirlo]
 const DIALOGS = [

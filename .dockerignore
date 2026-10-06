@@ -1,0 +1,19 @@
+# Lo que no entra al contexto de `docker build` (la imagen se compila desde cero).
+.git
+.github
+.next
+node_modules
+src/generated
+.env
+.env.*
+!.env.example
+backups
+*.dump
+e2e
+coverage
+docs
+.claude
+*.tsbuildinfo
+next-env.d.ts
+Dockerfile
+.dockerignore

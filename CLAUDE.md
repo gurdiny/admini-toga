@@ -16,7 +16,7 @@ El plan completo por fases está en [docs/PLAN.md](docs/PLAN.md). **Trabaja una 
 - [x] Fase 5 — Recordatorios / checklist
 - [x] Fase 6 — Panel de administración
 - [x] Fase 7 — Reportes, exportación y búsqueda
-- [ ] Fase 8 — Deploy, respaldos y operación
+- [ ] Fase 8 — Deploy, respaldos y operación (código listo; falta el primer deploy en el VPS)
 
 Al cerrar una fase: marcarla aquí, hacer commit (`feat(fase-N): ...`) y entregar al usuario **dos listas de pruebas**:
 1. Las que hizo Claude (pruebas automatizadas, curl, scripts) con su resultado.
@@ -31,7 +31,7 @@ Al cerrar una fase: marcarla aquí, hacer commit (`feat(fase-N): ...`) y entrega
 - Better Auth (email + contraseña, registro público deshabilitado)
 - Zod, date-fns + date-fns-tz, Recharts, exceljs
 - Vitest para pruebas
-- Hosting: VPS propio con Docker (app + Postgres + Caddy). La base nunca publica puertos en producción
+- Hosting: VPS propio (Ubuntu 24.04) administrado con **Easypanel** y su **Traefik** (no se instala otro proxy). Comparte servidor con n8n y Supabase (no tocarlos). La base nunca publica puertos en producción. Guía: [docs/DEPLOY.md](docs/DEPLOY.md)
 
 ## Reglas no negociables
 
@@ -117,6 +117,8 @@ npm test                               # Vitest (fechas, dinero, esquemas, error
 npm run e2e:clean                      # borra datos de las pruebas E2E (ver e2e/README.md)
 npm run lint && npm run typecheck      # antes de cada commit
 npm run build                          # verificar build de producción
+npm run backup                         # respaldo de la base local (backups/)
+npm run backup:test -- backups/x.dump  # probar un respaldo en una base temporal
 ```
 
 Usuarios del seed (solo desarrollo): `dueno@joyeria.local` (OWNER) y `mostrador@joyeria.local` (STAFF), contraseña `joyeria-dev-2026` (o `SEED_PASSWORD`).
@@ -165,3 +167,10 @@ Variables: [.env.example](.env.example) documenta todas. Se usa el puerto 5433 p
 - Un `trigger` de diálogo (Radix `asChild`) nunca se arma en un Server Component: al navegar sin recargar falla («Primitive.button failed to slot»). Hacer un componente de cliente que cree el botón (ver `OrderPaymentButton`).
 - Para exportar a Excel usar `exceljs`: el paquete `xlsx` publicado en npm está desactualizado y con vulnerabilidades conocidas.
 - El modelo `User` debe ser compatible con Better Auth: el hash de la contraseña vive en `Account.password`, no en `User`.
+- **Producción (Fase 8)**: `Dockerfile` multi-stage (Debian slim por el motor de migraciones de Prisma; standalone + CLI de Prisma aparte en `/app/migrate` con la versión del lockfile; usuario `node`). `docker/entrypoint.sh` corre `prisma migrate deploy` y luego `node server.js`. GitHub Actions (`.github/workflows/docker.yml`) corre lint/tipos/pruebas y publica `ghcr.io/gurdiny/admini-toga:{latest,sha-xxxx}`; el VPS no compila. En Easypanel es un servicio **Compose** con `toga-app` y `toga-db` (nombres únicos: la app también está en la red de Traefik). Trampas de Easypanel: las variables de su pestaña Environment llegan vacías (por eso `deploy/render.sh` escribe los valores en el YAML desde `/opt/toga-app/.env.production`), rutas siempre absolutas, y el dominio se crea **antes** del primer Deploy (si no, Traefik da 502).
+- **Variables al arrancar**: `src/lib/env.ts` (`checkServerEnv`, Zod) lo llama `src/instrumentation.ts`; si falta algo, `process.exit(1)` con la lista en español. Una variable vacía cuenta como faltante. En producción `BETTER_AUTH_URL` debe ser https (o localhost para probar la imagen).
+- **`/api/health`**: `SELECT 1`; 200 o 503, sin detalles (van al log). Lo usa el healthcheck del contenedor; el proxy lo deja pasar sin sesión.
+- **Errores**: `src/app/not-found.tsx`, `error.tsx` y `global-error.tsx` en español. En Next 16 los error boundaries reciben `retry()` (no `reset`). `global-error` no tiene Tailwind ni fuentes: estilos en línea.
+- **Instalación en producción** (`prisma/setup.ts`, empaquetado con esbuild como `/app/setup.mjs`): `docker exec -it toga-app node setup.mjs` carga catálogos base (`prisma/defaults.ts`, compartido con el seed; no pisa lo editado) y crea el OWNER, o si el correo existe le restablece la contraseña y cierra sus sesiones. Queda en la auditoría sin el hash.
+- **Respaldos**: `deploy/backup.sh` (pg_dump -Fc verificado con `pg_restore --list`, 14 días local, rclone a `gdrive:TOGA/respaldos` 90 días, cron de root 4:15 porque 3:30 es `/root/backup-diario.sh`). `deploy/restore.sh --test|--into|--replace` (`--replace` saca respaldo de seguridad, detiene la app y restaura en una transacción).
+- **Totales de pagos**: la agregación pura vive en `src/modules/payments/aggregate.ts` (`summarizePayments`, `supplierBalances`, `totalBalances`) con pruebas; `queries.ts` solo trae renglones.

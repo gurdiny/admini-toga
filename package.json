@@ -15,6 +15,8 @@
     "db:generate": "prisma generate",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
+    "backup": "DB_CONTAINER=$(docker compose ps -q db) DB_USER=joyeria DB_NAME=joyeria BACKUP_DIR=./backups RCLONE_REMOTE= bash deploy/backup.sh",
+    "backup:test": "DB_CONTAINER=$(docker compose ps -q db) DB_USER=joyeria DB_NAME=joyeria APP_CONTAINER= bash deploy/restore.sh --test",
     "postinstall": "prisma generate",
     "test": "vitest run",
     "test:watch": "vitest",
