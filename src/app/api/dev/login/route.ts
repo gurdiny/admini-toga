@@ -4,17 +4,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/lib/auth/config";
 import { DEV_PASSWORD, devAutoLoginEmail, isDevelopment } from "@/lib/dev/auto-login";
-
-function safeNext(next: string | null): string {
-  return next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
-}
+import { safeNextPath } from "@/lib/safe-redirect";
 
 export async function GET(request: NextRequest) {
   if (!isDevelopment()) return new NextResponse(null, { status: 404 });
 
   const params = request.nextUrl.searchParams;
   const email = params.get("as") ?? devAutoLoginEmail();
-  const next = safeNext(params.get("next"));
+  const next = safeNextPath(params.get("next"));
   if (!email) return NextResponse.redirect(new URL("/login?salir=1", request.url));
 
   const signIn = await auth.api.signInEmail({

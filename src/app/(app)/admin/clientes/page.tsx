@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { formatPhone } from "@/components/phone-link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { requirePageRole } from "@/lib/auth/session";
 import { formatCode } from "@/lib/codes";
 import { formatDay } from "@/lib/date";
 import { formatMXN } from "@/lib/money";
@@ -35,6 +36,9 @@ const columns: AdminColumn<ClientRow>[] = [
 ];
 
 export default async function ClientsPage({ searchParams }: PageProps<"/admin/clientes">) {
+  // Cada página verifica por su cuenta: el layout de /admin no basta (Next
+  // renderiza layout y página en paralelo, y la página se enviaría igual).
+  await requirePageRole("OWNER");
   const raw = (await searchParams).q;
   const q = (Array.isArray(raw) ? raw[0] : raw)?.trim() ?? "";
   const rows = await listClients(q);

@@ -21,6 +21,38 @@ export const auth = betterAuth({
     return origin && LAN_ORIGIN.test(origin) ? [origin] : [];
   },
 
+  // La app no usa ningún endpoint HTTP de /api/auth: login, logout y sesión
+  // van por auth.api.* desde el servidor. Se apagan los que permitirían algo
+  // fuera de la app (cambiar nombre o contraseña sin auditoría, intentar
+  // contraseñas por HTTP, enlazar cuentas…). Solo afecta las peticiones HTTP,
+  // no las llamadas internas a auth.api.
+  disabledPaths: [
+    "/sign-up/email",
+    "/sign-in/email",
+    "/sign-in/social",
+    "/update-user",
+    "/change-email",
+    "/change-password",
+    "/delete-user",
+    "/delete-user/callback",
+    "/link-social",
+    "/unlink-account",
+    "/list-accounts",
+    "/account-info",
+    "/get-access-token",
+    "/refresh-token",
+    "/request-password-reset",
+    "/reset-password",
+    "/send-verification-email",
+    "/verify-email",
+    "/verify-password",
+    "/update-session",
+    "/list-sessions",
+    "/revoke-session",
+    "/revoke-sessions",
+    "/revoke-other-sessions",
+  ],
+
   emailAndPassword: {
     enabled: true,
     // Nadie se registra solo: los usuarios los crea un OWNER desde /admin/usuarios.

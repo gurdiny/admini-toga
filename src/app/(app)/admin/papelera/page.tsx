@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { requirePageRole } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 import { AdminTable, type AdminColumn } from "@/modules/admin/components/admin-table";
 import { RestoreButton } from "@/modules/admin/components/restore-button";
@@ -24,6 +25,9 @@ const columns: AdminColumn<TrashRow>[] = [
 ];
 
 export default async function TrashPage({ searchParams }: PageProps<"/admin/papelera">) {
+  // Cada página verifica por su cuenta: el layout de /admin no basta (Next
+  // renderiza layout y página en paralelo, y la página se enviaría igual).
+  await requirePageRole("OWNER");
   const raw = (await searchParams).tipo;
   const type = typeof raw === "string" && raw in TRASH_TYPES ? (raw as TrashType) : undefined;
   const rows = await listTrash(type);

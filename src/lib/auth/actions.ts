@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { APIError } from "better-auth/api";
 import { z } from "zod";
 import { auth } from "@/lib/auth/config";
+import { clientIp, loginThrottle } from "@/lib/auth/login-throttle";
+import { safeNextPath } from "@/lib/safe-redirect";
 
 export type LoginState = { error: string; email: string } | undefined;
 
@@ -13,11 +15,6 @@ const loginSchema = z.object({
   password: z.string().min(1, "Escribe tu contraseña."),
   next: z.string().optional(),
 });
-
-/** Solo rutas internas: evita que ?next= mande a otro sitio. */
-function safeNext(next: string | undefined): string {
-  return next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
-}
 
 function loginErrorMessage(error: APIError): string {
   if (error.message === "USUARIO_INACTIVO") {
@@ -36,17 +33,30 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
     return { error: parsed.error.issues[0].message, email };
   }
 
+  // Límite de intentos (ver login-throttle.ts: el de Better Auth no aplica aquí).
+  const requestHeaders = await headers();
+  const ip = clientIp(requestHeaders);
+  const waitMinutes = loginThrottle.blockedFor(parsed.data.email, ip);
+  if (waitMinutes) {
+    return { error: `Demasiados intentos fallidos. Espera ${waitMinutes} min y vuelve a intentar.`, email };
+  }
+
   try {
     await auth.api.signInEmail({
       body: { email: parsed.data.email, password: parsed.data.password, rememberMe: true },
-      headers: await headers(),
+      headers: requestHeaders,
     });
   } catch (error) {
-    if (error instanceof APIError) return { error: loginErrorMessage(error), email };
+    if (error instanceof APIError) {
+      // «Desactivado» solo sale con la contraseña correcta: no es un intento fallido.
+      if (error.message !== "USUARIO_INACTIVO") loginThrottle.fail(parsed.data.email, ip);
+      return { error: loginErrorMessage(error), email };
+    }
     throw error;
   }
+  loginThrottle.succeed(parsed.data.email);
 
-  redirect(safeNext(parsed.data.next));
+  redirect(safeNextPath(parsed.data.next));
 }
 
 export async function logout() {

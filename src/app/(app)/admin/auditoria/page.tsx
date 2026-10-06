@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, History } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { requirePageRole } from "@/lib/auth/session";
 import { getToday, isDayKey, type DayKey } from "@/lib/date";
 import { ACTION_LABELS, ENTITY_LABELS } from "@/modules/admin/audit-format";
 import { AdminTable, type AdminColumn } from "@/modules/admin/components/admin-table";
@@ -61,6 +62,9 @@ type Params = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
 
 export default async function AuditPage({ searchParams }: PageProps<"/admin/auditoria">) {
+  // Cada página verifica por su cuenta: el layout de /admin no basta (Next
+  // renderiza layout y página en paralelo, y la página se enviaría igual).
+  await requirePageRole("OWNER");
   const params: Params = await searchParams;
   const usuario = one(params.usuario);
   const entidad = one(params.entidad) in ENTITY_LABELS ? one(params.entidad) : "";

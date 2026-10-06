@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { UserCog } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
-import { requireUser } from "@/lib/auth/session";
+import { requirePageRole } from "@/lib/auth/session";
 import { AdminTable, type AdminColumn } from "@/modules/admin/components/admin-table";
 import { NewUserButton, RoleBadgeText, UserRowActions } from "@/modules/admin/components/user-actions";
 import { listUsers, type UserRow } from "@/modules/admin/queries";
@@ -10,7 +10,10 @@ import { listUsers, type UserRow } from "@/modules/admin/queries";
 export const metadata: Metadata = { title: "Usuarios" };
 
 export default async function UsersPage() {
-  const [me, users] = await Promise.all([requireUser(), listUsers()]);
+  // Cada página verifica por su cuenta: el layout de /admin no basta (Next
+  // renderiza layout y página en paralelo, y la página se enviaría igual).
+  const me = await requirePageRole("OWNER");
+  const users = await listUsers();
 
   const columns: AdminColumn<UserRow>[] = [
     {

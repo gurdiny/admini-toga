@@ -2,11 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { requirePageRole } from "@/lib/auth/session";
 import { ADMIN_SECTIONS } from "@/modules/admin/sections";
 
 export const metadata: Metadata = { title: "Administración" };
 
-export default function AdminPage() {
+export default async function AdminPage() {
+  // Cada página verifica por su cuenta: el layout de /admin no basta (Next
+  // renderiza layout y página en paralelo, y la página se enviaría igual).
+  await requirePageRole("OWNER");
   return (
     <>
       <PageHeader title="Administración" description="Todo lo que se puede cambiar sin tocar el código." />

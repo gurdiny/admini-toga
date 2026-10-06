@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Tags, Truck } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
+import { requirePageRole } from "@/lib/auth/session";
 import { formatCode } from "@/lib/codes";
 import { cn } from "@/lib/utils";
 import { AdminTable, type AdminColumn } from "@/modules/admin/components/admin-table";
@@ -49,6 +50,9 @@ const supplierColumns: AdminColumn<SupplierListItem>[] = [
 ];
 
 export default async function CatalogsPage({ searchParams }: PageProps<"/admin/catalogos">) {
+  // Cada página verifica por su cuenta: el layout de /admin no basta (Next
+  // renderiza layout y página en paralelo, y la página se enviaría igual).
+  await requirePageRole("OWNER");
   const raw = (await searchParams).tab;
   const tab: Tab = TABS.some((t) => t.value === raw) ? (raw as Tab) : "pago";
   const type = tab === "proveedor" ? "SUPPLIER" : "PAYMENT";
