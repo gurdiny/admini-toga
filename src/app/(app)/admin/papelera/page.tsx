@@ -15,6 +15,8 @@ const FILTERS: { value: TrashType | null; label: string }[] = [
   { value: "pagos", label: "Pagos" },
   { value: "adeudos", label: "Adeudos" },
   { value: "recordatorios", label: "Recordatorios" },
+  { value: "proveedores", label: "Proveedores" },
+  { value: "clientes", label: "Clientes" },
 ];
 
 const columns: AdminColumn<TrashRow>[] = [
@@ -56,7 +58,7 @@ export default async function TrashPage({ searchParams }: PageProps<"/admin/pape
         rowKey={(r) => r.id}
         columns={columns}
         actions={(r) => <RestoreButton type={r.type} id={r.id} title={r.title} />}
-        empty={{ icon: Trash2, title: "La papelera está vacía", description: "Cuando alguien borre un pago, adeudo o recordatorio, aparecerá aquí." }}
+        empty={{ icon: Trash2, title: "La papelera está vacía", description: "Cuando alguien borre un pago, una nota, un pedido, un proveedor o un cliente, aparecerá aquí." }}
       />
     </>
   );

@@ -161,26 +161,33 @@ model Category {
 // Ningún dato de contacto es obligatorio: muchos proveedores no tienen
 // correo ni WhatsApp. Solo el nombre.
 model Supplier {
-  id          String   @id @default(cuid(2))
-  code        Int      @unique @default(autoincrement()) // se muestra como PROV-0001
-  name        String
-  nameKey     String   @unique
-  categoryId  String?
-  contactName String? // persona con quien se trata
-  phone       String? // 10 dígitos, normalizado
-  hasWhatsApp Boolean  @default(false) // solo entonces se muestra el enlace a WhatsApp
-  email       String?
-  address     String?
-  notes       String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(cuid(2))
+  code         Int      @unique @default(autoincrement()) // se muestra como PROV-0001
+  name         String
+  nameKey      String   @unique
+  categoryId   String?
+  // Qué se le paga a este proveedor: decide los renglones de su nota.
+  // Al menos uno debe ser verdadero (CHECK en la migración).
+  chargesMetal Boolean  @default(false) // entrega plata
+  chargesLabor Boolean  @default(false) // hechura: engaste, soldadura, pulido, grabado
+  contactName  String? // persona con quien se trata
+  phone        String? // 10 dígitos, normalizado
+  hasWhatsApp  Boolean  @default(false) // solo entonces se muestra el enlace a WhatsApp
+  email        String?
+  address      String?
+  notes        String?
+  isActive     Boolean   @default(true)
+  // Borrado lógico: se va a la papelera con todas sus notas y pagos.
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   category Category?         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   debts    SupplierDebt[]
   payments SupplierPayment[]
 
   @@index([isActive])
+  @@index([deletedAt])
   @@map("suppliers")
 }
 
@@ -215,7 +222,12 @@ model SupplierDebt {
   kind        DebtKind  @default(CREDIT)
   date        DateTime  @db.Date // día en que se contrajo, o "al día" del saldo inicial
   description String
-  amount      Decimal   @db.Decimal(12, 2) // monto original del adeudo
+  // La nota va partida en dos renglones: la plata que entrega (metal) y la
+  // hechura (engaste, soldadura, pulido, grabado). `amount` es la suma de los
+  // dos y lo garantiza un CHECK: ningún total se calcula al vuelo en reportes.
+  amount      Decimal   @db.Decimal(12, 2) // total de la nota = metal + hechura
+  amountMetal Decimal   @default(0) @db.Decimal(12, 2)
+  amountLabor Decimal   @default(0) @db.Decimal(12, 2)
   currency    String    @default("MXN") @db.Char(3)
   categoryId  String? // categoría de gasto que heredan sus abonos por defecto
   dueDate     DateTime? @db.Date // fecha límite acordada, si la hay
@@ -248,7 +260,11 @@ model SupplierPayment {
   supplierId    String
   categoryId    String
   concept       String
-  amount        Decimal       @db.Decimal(12, 2)
+  // Un pago se reparte entre los dos renglones de la nota: $6,000 pueden ser
+  // $5,000 de metal y $1,000 de hechura. `amount` es la suma (CHECK).
+  amount        Decimal       @db.Decimal(12, 2) // total pagado = metal + hechura
+  amountMetal   Decimal       @default(0) @db.Decimal(12, 2)
+  amountLabor   Decimal       @default(0) @db.Decimal(12, 2)
   currency      String        @default("MXN") @db.Char(3)
   exchangeRate  Decimal?      @db.Decimal(10, 4) // a MXN, solo si currency != MXN
   paymentMethod PaymentMethod

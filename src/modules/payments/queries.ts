@@ -3,7 +3,18 @@ import { db } from "@/lib/db";
 import { dbToDay, dayRangeWhere, formatDay, formatForDisplay, type DayKey, type DayRange } from "@/lib/date";
 import { moneyToString, toMXN, ZERO, type Decimal } from "@/lib/money";
 import { toNameKey } from "@/lib/normalize";
-import { summarizePayments, supplierBalances, totalBalances, type Balances, type BreakdownRow } from "./aggregate";
+import {
+  isSplitSettled,
+  subtractSplit,
+  sumSplits,
+  summarizePayments,
+  supplierBalances,
+  toSplit,
+  totalBalances,
+  type Balances,
+  type BreakdownRow,
+  type Split,
+} from "./aggregate";
 import { parseCode } from "@/lib/codes";
 import { getSettings } from "@/lib/settings";
 import type { PaymentMethod, Prisma } from "@/generated/prisma/client";
@@ -11,7 +22,7 @@ import type { PaymentMethod, Prisma } from "@/generated/prisma/client";
 // Todo lo que sale de aquí es serializable (montos como string "1250.00",
 // días como "yyyy-MM-dd") para poder pasarlo a Client Components.
 
-export type { Balances, BreakdownRow } from "./aggregate";
+export type { Balances, BreakdownRow, Split } from "./aggregate";
 
 // ─── Saldos ────────────────────────────────────────────────────────────────
 
@@ -40,6 +51,17 @@ export async function getSupplierBalances(supplierIds?: string[]): Promise<Map<s
   );
 }
 
+/** Un abono dentro de la nota: el historial que se ve en cada mitad. */
+export type DebtPaymentRow = {
+  id: string;
+  code: number;
+  date: DayKey;
+  concept: string;
+  amount: string;
+  amountMetal: string;
+  amountLabor: string;
+};
+
 export type DebtSummary = {
   id: string;
   code: number;
@@ -52,29 +74,39 @@ export type DebtSummary = {
   currency: string;
   categoryId: string | null;
   categoryName: string | null;
+  /** Total de la nota (metal + hechura). */
   amount: string;
-  paid: string;
-  balance: string;
+  /** Los dos renglones de la nota, lo abonado en cada uno y lo que falta. */
+  amounts: Split;
+  paid: Split;
+  balance: Split;
   isSettled: boolean;
+  /** Abonos vigentes, del más nuevo al más viejo. */
+  payments: DebtPaymentRow[];
   createdById: string;
   createdAt: Date;
 };
 
-/** Adeudos de un proveedor con lo abonado y su saldo. */
+/** Notas de un proveedor con lo abonado y el saldo de cada renglón. */
 export async function getSupplierDebts(supplierId: string, { onlyOpen = false } = {}): Promise<DebtSummary[]> {
   const debts = await db.supplierDebt.findMany({
     where: { supplierId, deletedAt: null },
     orderBy: [{ date: "asc" }, { code: "asc" }],
     include: {
       category: { select: { name: true } },
-      payments: { where: { deletedAt: null }, select: { amount: true } },
+      payments: {
+        where: { deletedAt: null },
+        orderBy: [{ date: "desc" }, { code: "desc" }],
+        select: { id: true, code: true, date: true, concept: true, amount: true, amountMetal: true, amountLabor: true },
+      },
     },
   });
 
   return debts
     .map((debt) => {
-      const paid = debt.payments.reduce<Decimal>((sum, p) => sum.add(p.amount), ZERO);
-      const balance = debt.amount.sub(paid);
+      const amounts = toSplit(debt.amountMetal, debt.amountLabor);
+      const paid = sumSplits(debt.payments);
+      const balance = subtractSplit(amounts, paid);
       return {
         id: debt.id,
         code: debt.code,
@@ -88,9 +120,19 @@ export async function getSupplierDebts(supplierId: string, { onlyOpen = false } 
         categoryId: debt.categoryId,
         categoryName: debt.category?.name ?? null,
         amount: moneyToString(debt.amount),
-        paid: moneyToString(paid),
-        balance: moneyToString(balance),
-        isSettled: balance.lte(0),
+        amounts,
+        paid,
+        balance,
+        isSettled: isSplitSettled(balance),
+        payments: debt.payments.map((payment) => ({
+          id: payment.id,
+          code: payment.code,
+          date: dbToDay(payment.date),
+          concept: payment.concept,
+          amount: moneyToString(payment.amount),
+          amountMetal: moneyToString(payment.amountMetal),
+          amountLabor: moneyToString(payment.amountLabor),
+        })),
         createdById: debt.createdById,
         createdAt: debt.createdAt,
       };
@@ -107,7 +149,8 @@ export type SupplierListItem = {
   contactName: string | null;
   phone: string | null;
   hasWhatsApp: boolean;
-  categoryName: string | null;
+  chargesMetal: boolean;
+  chargesLabor: boolean;
   isActive: boolean;
   balances: Balances;
 };
@@ -118,7 +161,10 @@ export async function listSuppliers({
   includeInactive = false,
 }: { search?: string; includeInactive?: boolean } = {}): Promise<SupplierListItem[]> {
   const query = search.trim();
-  const where: Prisma.SupplierWhereInput = includeInactive ? {} : { isActive: true };
+  // Los borrados nunca salen en listados ni en los buscadores.
+  const where: Prisma.SupplierWhereInput = includeInactive
+    ? { deletedAt: null }
+    : { isActive: true, deletedAt: null };
   if (query) {
     const code = parseCode(query, "supplier");
     const digits = query.replace(/\D/g, "");
@@ -133,7 +179,6 @@ export async function listSuppliers({
   const suppliers = await db.supplier.findMany({
     where,
     orderBy: { nameKey: "asc" },
-    include: { category: { select: { name: true } } },
   });
   const balances = await getSupplierBalances(suppliers.map((s) => s.id));
 
@@ -144,17 +189,15 @@ export async function listSuppliers({
     contactName: s.contactName,
     phone: s.phone,
     hasWhatsApp: s.hasWhatsApp,
-    categoryName: s.category?.name ?? null,
+    chargesMetal: s.chargesMetal,
+    chargesLabor: s.chargesLabor,
     isActive: s.isActive,
     balances: balances.get(s.id) ?? {},
   }));
 }
 
 export async function getSupplier(id: string) {
-  return db.supplier.findUnique({
-    where: { id },
-    include: { category: { select: { id: true, name: true } } },
-  });
+  return db.supplier.findFirst({ where: { id, deletedAt: null } });
 }
 
 // ─── Estado de cuenta ──────────────────────────────────────────────────────
@@ -168,6 +211,8 @@ export type StatementEntry = {
   currency: string;
   /** Positivo: aumenta lo que se debe. Negativo: abono. CONTADO no afecta el saldo. */
   amount: string;
+  /** Cuánto del movimiento fue metal y cuánto hechura (siempre en positivo). */
+  split: Split;
   /** Saldo después de este movimiento, en su moneda. */
   balanceAfter: string;
   debtCode: number | null;
@@ -185,6 +230,8 @@ export type StatementEntry = {
     categoryId: string;
     concept: string;
     amount: string;
+    amountMetal: string;
+    amountLabor: string;
     currency: string;
     exchangeRate: string | null;
     paymentMethod: PaymentMethod;
@@ -214,6 +261,7 @@ export async function getSupplierStatement(supplierId: string): Promise<Statemen
       description: d.kind === "OPENING_BALANCE" ? `Saldo inicial · ${d.description}` : d.description,
       currency: d.currency,
       amount: moneyToString(d.amount),
+      split: toSplit(d.amountMetal, d.amountLabor),
       debtCode: d.code,
       paymentMethod: null,
       createdById: d.createdById,
@@ -233,6 +281,7 @@ export async function getSupplierStatement(supplierId: string): Promise<Statemen
       description: p.concept,
       currency: p.currency,
       amount: moneyToString(p.debtId ? p.amount.neg() : p.amount),
+      split: toSplit(p.amountMetal, p.amountLabor),
       debtCode: p.debt?.code ?? null,
       paymentMethod: p.paymentMethod,
       createdById: p.createdById,
@@ -246,6 +295,8 @@ export async function getSupplierStatement(supplierId: string): Promise<Statemen
         categoryId: p.categoryId,
         concept: p.concept,
         amount: moneyToString(p.amount),
+        amountMetal: moneyToString(p.amountMetal),
+        amountLabor: moneyToString(p.amountLabor),
         currency: p.currency,
         exchangeRate: p.exchangeRate?.toString() ?? null,
         paymentMethod: p.paymentMethod,
@@ -278,10 +329,20 @@ export async function getSupplierStatement(supplierId: string): Promise<Statemen
 /** Pedido (recordatorio) al que corresponde un pago: «Ana López · 12 oct». */
 export type PaymentOrderRef = { id: string; clientId: string; label: string };
 
-const ORDER_SELECT = { select: { id: true, targetDate: true, client: { select: { id: true, name: true } } } } as const;
+const ORDER_SELECT = {
+  select: { id: true, targetDate: true, deletedAt: true, client: { select: { id: true, name: true, deletedAt: true } } },
+} as const;
 
-function toOrderRef(order: { id: string; targetDate: Date; client: { id: string; name: string } } | null): PaymentOrderRef | null {
-  return order ? { id: order.id, clientId: order.client.id, label: `${order.client.name} · ${formatDay(dbToDay(order.targetDate), "d MMM yyyy")}` } : null;
+/**
+ * Pedido de cliente al que corresponde el pago. Si el pedido o su cliente se
+ * borraron, el pago se queda pero deja de enseñar el enlace: llevaría a una
+ * ficha que ya no existe.
+ */
+function toOrderRef(
+  order: { id: string; targetDate: Date; deletedAt: Date | null; client: { id: string; name: string; deletedAt: Date | null } } | null,
+): PaymentOrderRef | null {
+  if (!order || order.deletedAt || order.client.deletedAt) return null;
+  return { id: order.id, clientId: order.client.id, label: `${order.client.name} · ${formatDay(dbToDay(order.targetDate), "d MMM yyyy")}` };
 }
 
 // ─── Traza: quién y cuándo ─────────────────────────────────────────────────
@@ -346,7 +407,10 @@ export type PaymentListItem = {
   code: number;
   date: DayKey;
   concept: string;
+  /** Total pagado y cómo se repartió entre los dos renglones. */
   amount: string;
+  amountMetal: string;
+  amountLabor: string;
   currency: string;
   exchangeRate: string | null;
   paymentMethod: PaymentMethod;
@@ -423,6 +487,8 @@ export async function getPayments(filters: PaymentFilters): Promise<{ items: Pay
       date: dbToDay(p.date),
       concept: p.concept,
       amount: moneyToString(p.amount),
+      amountMetal: moneyToString(p.amountMetal),
+      amountLabor: moneyToString(p.amountLabor),
       currency: p.currency,
       exchangeRate: p.exchangeRate?.toString() ?? null,
       paymentMethod: p.paymentMethod,
@@ -456,6 +522,8 @@ export type PaymentExportRow = {
   debtCode: number | null;
   currency: string;
   amount: string;
+  amountMetal: string;
+  amountLabor: string;
   exchangeRate: string | null;
   /** En pesos: amount × tipo de cambio (igual que los totales de la pantalla). */
   amountMXN: string;
@@ -477,7 +545,7 @@ export async function getPaymentsForExport(filters: Omit<PaymentFilters, "page">
       category: { select: { name: true } },
       debt: { select: { code: true } },
       createdBy: { select: { name: true } },
-      order: { select: { client: { select: { code: true, name: true } } } },
+      order: { select: { deletedAt: true, client: { select: { code: true, name: true, deletedAt: true } } } },
     },
   });
   return rows.map((p) => ({
@@ -490,11 +558,14 @@ export async function getPaymentsForExport(filters: Omit<PaymentFilters, "page">
     paymentMethod: p.paymentMethod,
     debtCode: p.debt?.code ?? null,
     currency: p.currency,
+    amountMetal: moneyToString(p.amountMetal),
+    amountLabor: moneyToString(p.amountLabor),
     amount: moneyToString(p.amount),
     exchangeRate: p.exchangeRate?.toString() ?? null,
     amountMXN: moneyToString(toMXN(p)),
-    clientName: p.order?.client.name ?? null,
-    clientCode: p.order?.client.code ?? null,
+    // Un pedido o un cliente borrado no se exporta (igual que en la pantalla).
+    clientName: p.order && !p.order.deletedAt && !p.order.client.deletedAt ? p.order.client.name : null,
+    clientCode: p.order && !p.order.deletedAt && !p.order.client.deletedAt ? p.order.client.code : null,
     createdByName: p.createdBy.name,
     createdAt: formatForDisplay(p.createdAt, "dd/MM/yyyy HH:mm"),
   }));
@@ -533,9 +604,9 @@ export async function getPaymentsSummary(range: DayRange): Promise<PaymentsSumma
 // ─── Opciones para formularios ─────────────────────────────────────────────
 
 export async function getCaptureOptions() {
-  const [suppliers, paymentCategories, supplierCategories, settings] = await Promise.all([
+  const [suppliers, paymentCategories, settings] = await Promise.all([
     db.supplier.findMany({
-      where: { isActive: true },
+      where: { isActive: true, deletedAt: null },
       orderBy: { nameKey: "asc" },
       select: { id: true, code: true, name: true },
     }),
@@ -544,16 +615,11 @@ export async function getCaptureOptions() {
       orderBy: [{ sortOrder: "asc" }, { nameKey: "asc" }],
       select: { id: true, name: true, color: true },
     }),
-    db.category.findMany({
-      where: { type: "SUPPLIER", isActive: true },
-      orderBy: [{ sortOrder: "asc" }, { nameKey: "asc" }],
-      select: { id: true, name: true, color: true },
-    }),
     getSettings(),
   ]);
   // Valores por defecto de /admin/configuracion para los formularios de captura.
   const defaults = { currency: settings.defaultCurrency, paymentMethod: settings.defaultPaymentMethod };
-  return { suppliers, paymentCategories, supplierCategories, defaults };
+  return { suppliers, paymentCategories, defaults };
 }
 
 export type CaptureOptions = Awaited<ReturnType<typeof getCaptureOptions>>;

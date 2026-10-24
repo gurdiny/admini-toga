@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { summarizePayments, supplierBalances, totalBalances, type PaymentForSummary } from "./aggregate";
+import {
+  isSplitSettled,
+  splitsByCurrency,
+  subtractSplit,
+  sumSplits,
+  summarizePayments,
+  supplierBalances,
+  toSplit,
+  totalBalances,
+  type PaymentForSummary,
+} from "./aggregate";
 
 const taxco = { id: "s1", name: "Platería Taxco" };
 const engaste = { id: "s2", name: "Taller de Engaste" };
@@ -88,5 +98,54 @@ describe("saldos con proveedores", () => {
   it("total por pagar: suma los saldos de todos, sin mezclar monedas", () => {
     expect(totalBalances([{ MXN: "14299.50" }, { MXN: "0.50", USD: "200.00" }, {}])).toEqual({ MXN: "14300.00", USD: "200.00" });
     expect(totalBalances([])).toEqual({});
+  });
+});
+
+describe("los dos renglones de la nota", () => {
+  const nota = toSplit("20000", "5000");
+
+  it("el total es la suma de los dos renglones", () => {
+    expect(nota).toEqual({ metal: "20000.00", labor: "5000.00", total: "25000.00" });
+  });
+
+  it("suma los abonos renglón por renglón", () => {
+    const abonos = sumSplits([
+      { amountMetal: "15000", amountLabor: "3500" },
+      { amountMetal: "3000", amountLabor: "0" },
+    ]);
+    expect(abonos).toEqual({ metal: "18000.00", labor: "3500.00", total: "21500.00" });
+  });
+
+  it("el metal no paga la hechura: cada mitad lleva su saldo", () => {
+    const abonos = sumSplits([{ amountMetal: "20000", amountLabor: "0" }]);
+    const falta = subtractSplit(nota, abonos);
+    expect(falta).toEqual({ metal: "0.00", labor: "5000.00", total: "5000.00" });
+    expect(isSplitSettled(falta)).toBe(false);
+  });
+
+  it("la nota se liquida solo cuando los dos renglones quedan en cero", () => {
+    expect(isSplitSettled(subtractSplit(nota, sumSplits([{ amountMetal: "20000", amountLabor: "5000" }])))).toBe(true);
+  });
+
+  it("no mezcla monedas y omite los saldos en cero", () => {
+    const saldos = splitsByCurrency([
+      { currency: "MXN", balance: toSplit("1000", "200") },
+      { currency: "MXN", balance: toSplit("500", "0") },
+      { currency: "USD", balance: toSplit("0", "80") },
+      { currency: "MXN", balance: toSplit("0", "0") },
+    ]);
+    expect(saldos).toEqual({
+      MXN: { metal: "1500.00", labor: "200.00", total: "1700.00" },
+      USD: { metal: "0.00", labor: "80.00", total: "80.00" },
+    });
+  });
+
+  it("centavos: tres abonos de un tercio no pierden ni un centavo", () => {
+    const abonos = sumSplits([
+      { amountMetal: "0.33", amountLabor: "0.01" },
+      { amountMetal: "0.33", amountLabor: "0.01" },
+      { amountMetal: "0.34", amountLabor: "0.01" },
+    ]);
+    expect(abonos).toEqual({ metal: "1.00", labor: "0.03", total: "1.03" });
   });
 });

@@ -35,8 +35,11 @@ const UNIQUE_MESSAGES: Record<string, string> = {
 function checkViolationMessage(dbMessage: string): string {
   const debt = dbMessage.match(/ADE-\d+/)?.[0];
   const ref = debt ? ` ${debt}` : "";
+  // Los triggers marcan el renglón de la nota entre corchetes: [metal].
+  const row = dbMessage.match(/\[(metal|mano de obra)\]/)?.[1];
+  const rowRef = row ? ` de ${row}` : "";
   if (dbMessage.startsWith("ABONO_EXCEDE_SALDO")) {
-    return `El abono es mayor que el saldo pendiente del adeudo${ref}.`;
+    return `El abono${rowRef} es mayor que el saldo pendiente del adeudo${ref}.`;
   }
   if (dbMessage.startsWith("MONEDA_DISTINTA")) {
     return `El abono debe estar en la misma moneda que el adeudo${ref}.`;
@@ -48,10 +51,16 @@ function checkViolationMessage(dbMessage: string): string {
     return `El adeudo${ref} ya tiene abonos. Elimina primero los abonos.`;
   }
   if (dbMessage.startsWith("MONTO_MENOR_A_ABONADO")) {
-    return `El monto del adeudo${ref} no puede ser menor a lo que ya se abonó.`;
+    return `El monto${rowRef} del adeudo${ref} no puede ser menor a lo que ya se abonó.`;
   }
   if (dbMessage.includes("_amount_positive")) {
     return "El monto debe ser mayor a cero.";
+  }
+  if (dbMessage.includes("_amount_split")) {
+    return "El total no coincide con la suma de metal y mano de obra.";
+  }
+  if (dbMessage.includes("_split_not_negative")) {
+    return "Los montos de metal y mano de obra no pueden ser negativos.";
   }
   return "Los datos no cumplen una regla del sistema.";
 }

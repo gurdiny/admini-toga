@@ -57,6 +57,29 @@ export const zMoney = z
   });
 
 /**
+ * Monto de un renglón de la nota (metal o mano de obra): puede ir vacío o en
+ * cero, porque una nota puede ser toda de metal o toda de hechura. Que el
+ * total no quede en cero lo revisa el esquema que junta los dos renglones.
+ */
+export const zMoneyRow = z
+  .union([z.string(), z.number(), z.null()], { error: "Escribe un monto." })
+  .optional()
+  .transform((value, ctx) => {
+    const raw = value == null ? "" : String(value).trim();
+    if (!raw) return "0.00";
+    const amount = parseMoney(raw);
+    if (!amount) {
+      ctx.addIssue({ code: "custom", message: "Escribe un monto válido, por ejemplo 1250.50." });
+      return z.NEVER;
+    }
+    if (amount.gte("10000000000")) {
+      ctx.addIssue({ code: "custom", message: "El monto es demasiado grande." });
+      return z.NEVER;
+    }
+    return amount.toFixed(2);
+  });
+
+/**
  * Día calendario "yyyy-MM-dd", no más de un año en el futuro.
  * Sale como Date listo para una columna @db.Date (medianoche UTC de ese día),
  * para que nadie pase el texto directo a Prisma: Prisma acepta strings en

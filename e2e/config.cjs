@@ -3,9 +3,21 @@ const fs = require("fs");
 const path = require("path");
 
 const CHROME = process.env.CHROME_PATH ?? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+// Desde WSL, Playwright no puede lanzar el Chrome de Windows: le habla por
+// descriptores de archivo (--remote-debugging-pipe) y esos no cruzan a Windows.
+// En ese caso se abre Chrome a mano con --remote-debugging-port=9222 y se le
+// pasa E2E_CDP_URL=http://127.0.0.1:9222. Ver e2e/README.md.
+const CDP_URL = process.env.E2E_CDP_URL ?? "";
 const B = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 const dir = path.join(__dirname, "screenshots");
 fs.mkdirSync(dir, { recursive: true });
+
+/** Navegador de las pruebas: Chrome de Windows, o uno ya abierto si hay E2E_CDP_URL. */
+async function launchBrowser() {
+  const { chromium } = require("playwright-core");
+  if (CDP_URL) return chromium.connectOverCDP(CDP_URL);
+  return chromium.launch({ executablePath: CHROME, headless: true });
+}
 
 /**
  * Elige un día en el calendario de TOGA: abre el campo, avanza o retrocede de
@@ -44,6 +56,7 @@ async function sql(text, params = []) {
 }
 
 module.exports = {
+  launchBrowser,
   pickDay,
   sql,
   CHROME,

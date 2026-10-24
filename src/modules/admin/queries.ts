@@ -212,7 +212,13 @@ export async function auditUsers() {
 
 // ─── Papelera ──────────────────────────────────────────────────────────────
 
-export const TRASH_TYPES = { pagos: "SupplierPayment", adeudos: "SupplierDebt", recordatorios: "OrderReminder" } as const;
+export const TRASH_TYPES = {
+  pagos: "SupplierPayment",
+  adeudos: "SupplierDebt",
+  recordatorios: "OrderReminder",
+  proveedores: "Supplier",
+  clientes: "Client",
+} as const;
 export type TrashType = keyof typeof TRASH_TYPES;
 
 export type TrashRow = {
@@ -230,16 +236,19 @@ export type TrashRow = {
 
 export async function listTrash(type?: TrashType): Promise<TrashRow[]> {
   const deleted = { deletedAt: { not: null } } as const;
-  const [payments, debts, reminders] = await Promise.all([
+  const [payments, debts, reminders, suppliers, clients] = await Promise.all([
     !type || type === "pagos"
       ? db.supplierPayment.findMany({ where: deleted, include: { supplier: { select: { name: true } }, debt: { select: { code: true } } } })
       : [],
     !type || type === "adeudos" ? db.supplierDebt.findMany({ where: deleted, include: { supplier: { select: { name: true } } } }) : [],
     !type || type === "recordatorios" ? db.orderReminder.findMany({ where: deleted, include: { client: { select: { name: true, code: true } } } }) : [],
+    !type || type === "proveedores" ? db.supplier.findMany({ where: deleted }) : [],
+    // Incluye a los duplicados que se fusionaron: su nota dice con quién.
+    !type || type === "clientes" ? db.client.findMany({ where: deleted }) : [],
   ]);
 
   // Quién lo borró: el último DELETE de la auditoría de cada registro.
-  const ids = [...payments, ...debts, ...reminders].map((r) => r.id);
+  const ids = [...payments, ...debts, ...reminders, ...suppliers, ...clients].map((r) => r.id);
   const logs = ids.length
     ? await db.auditLog.findMany({
         where: { action: "DELETE", entityId: { in: ids } },
@@ -281,6 +290,26 @@ export async function listTrash(type?: TrashType): Promise<TrashRow[]> {
       deletedAt: when(r.deletedAt!),
       deletedBy: deletedBy.get(r.id) ?? null,
       sortKey: r.deletedAt!.getTime(),
+    })),
+    ...suppliers.map((s) => ({
+      type: "proveedores" as const,
+      id: s.id,
+      title: `${formatCode("supplier", s.code)} · ${s.name}`,
+      detail: [s.contactName, s.phone].filter(Boolean).join(" · ") || "Proveedor borrado con sus adeudos y sus pagos",
+      amount: null,
+      deletedAt: when(s.deletedAt!),
+      deletedBy: deletedBy.get(s.id) ?? null,
+      sortKey: s.deletedAt!.getTime(),
+    })),
+    ...clients.map((c) => ({
+      type: "clientes" as const,
+      id: c.id,
+      title: `${formatCode("client", c.code)} · ${c.name}`,
+      detail: c.notes ?? c.phone ?? "Cliente borrado con sus pedidos",
+      amount: null,
+      deletedAt: when(c.deletedAt!),
+      deletedBy: deletedBy.get(c.id) ?? null,
+      sortKey: c.deletedAt!.getTime(),
     })),
   ];
   return rows.sort((a, b) => b.sortKey - a.sortKey);

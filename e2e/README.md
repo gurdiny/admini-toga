@@ -25,6 +25,32 @@ npm run dev                         # en otra terminal, con DEV_AUTO_LOGIN en .e
 Variables opcionales: `E2E_BASE_URL` (por defecto `http://localhost:3000`) y
 `CHROME_PATH`. Las capturas quedan en `e2e/screenshots/` (no se versiona).
 
+**Ojo con las variables y el Node de Windows**: lo que se exporta en WSL no
+llega a `node.exe` salvo que esté en `WSLENV`. Para apuntar a otro servidor:
+
+```bash
+WSLENV=E2E_BASE_URL E2E_BASE_URL=http://localhost:3001 \
+  "/mnt/c/Program Files/nodejs/node.exe" "$(wslpath -w e2e/layout.e2e.cjs)"
+```
+
+Sin `WSLENV` la prueba se va al 3000 sin avisar y las fallas no tienen sentido.
+
+## Probar contra una base sembrada, sin tocar la de desarrollo
+
+Las pruebas necesitan datos (proveedores activos, pedidos de varios días). Si
+la base de desarrollo está vacía o revuelta, conviene levantar una copia:
+
+```bash
+docker exec joyeria-db-1 psql -U joyeria -d joyeria -c 'CREATE DATABASE joyeria_e2e;'
+DATABASE_URL="postgresql://joyeria:joyeria_dev@localhost:5433/joyeria_e2e" npx prisma migrate deploy
+DATABASE_URL="postgresql://joyeria:joyeria_dev@localhost:5433/joyeria_e2e" npm run db:seed
+```
+
+Next 16 no deja dos `next dev` en la misma carpeta, así que el segundo servidor
+va en una copia del proyecto (con `node_modules` enlazado con `cp -al`, no con
+un symlink: Turbopack rechaza enlaces que salen de la carpeta) y su propio
+`.env` apuntando a `joyeria_e2e`.
+
 ## Limpiar los datos de prueba
 
 ```bash

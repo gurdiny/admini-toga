@@ -2,8 +2,7 @@
 // historial del cliente con pago ligado al pedido (se conserva al editar),
 // exportación a Excel/CSV con permisos y el Inicio de cada rol.
 const fs = require("fs");
-const { chromium } = require("playwright-core");
-const { CHROME, B, shots, log } = require("./config.cjs");
+const { launchBrowser, B, shots, log } = require("./config.cjs");
 
 const MOBILE = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: "es-MX", acceptDownloads: true };
 const CLIENT = `Cliente E2E Reportes ${Date.now() % 100000}`;
@@ -11,7 +10,7 @@ const NOTE = "E2E pedido de reporte: anillo de plata talla 7";
 const CONCEPT = "E2E costo del pedido";
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: CHROME, headless: true });
+  const browser = await launchBrowser();
   const staff = await (await browser.newContext(MOBILE)).newPage();
   const owner = await (await browser.newContext(MOBILE)).newPage();
   for (const page of [staff, owner]) page.setDefaultTimeout(15000);
@@ -60,10 +59,10 @@ const CONCEPT = "E2E costo del pedido";
     await pay.getByLabel("Proveedor").fill("Taller");
     await pay.getByRole("button", { name: /^Taller/ }).first().click();
     await pay.getByRole("radio", { name: /Pago de contado/ }).click();
-    await pay.getByLabel("Monto").fill("100");
+    await pay.getByLabel("Mano de obra", { exact: true }).fill("100");
     await pay.getByLabel("Concepto").fill(CONCEPT);
     await pay.getByLabel("Categoría").click();
-    await staff.getByRole("option", { name: "Mano de obra" }).click();
+    await staff.getByRole("option", { name: "Otros" }).click();
     await pay.getByRole("button", { name: "Registrar pago" }).click();
     await pay.waitFor({ state: "hidden" });
     await staff.getByText(CONCEPT).waitFor();
@@ -95,7 +94,7 @@ const CONCEPT = "E2E costo del pedido";
     await detail.getByRole("button", { name: "Editar" }).click();
     const edit = owner.getByRole("dialog", { name: /Editar PAG-/ });
     log(await edit.getByText(`${CLIENT} ·`).isVisible(), "editar pago: muestra el pedido");
-    await edit.getByLabel("Monto").fill("120");
+    await edit.getByLabel("Mano de obra", { exact: true }).fill("120");
     await edit.getByRole("button", { name: "Guardar cambios" }).click();
     await edit.waitFor({ state: "hidden" });
     await go(owner, new URL(clientUrl).pathname);

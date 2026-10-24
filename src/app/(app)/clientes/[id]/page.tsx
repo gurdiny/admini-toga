@@ -12,7 +12,7 @@ import { formatDay } from "@/lib/date";
 import { formatMoney, formatMXN } from "@/lib/money";
 import { getSettings, requireModule } from "@/lib/settings";
 import { cn } from "@/lib/utils";
-import { EditClientButton, MergeClientButton } from "@/modules/admin/components/client-actions";
+import { DeleteClientButton, EditClientButton, MergeClientButton } from "@/modules/admin/components/client-actions";
 import { getClientHistory, type ClientOrder } from "@/modules/clients/queries";
 import { OrderPaymentButton } from "@/modules/payments/components/order-payment-button";
 import { getCaptureOptions, type CaptureOptions } from "@/modules/payments/queries";
@@ -68,6 +68,7 @@ export default async function ClientPage({ params }: PageProps<"/clientes/[id]">
             <div className="grid grid-cols-2 gap-2 sm:flex">
               <EditClientButton client={client} />
               <MergeClientButton client={client} />
+              <DeleteClientButton client={client} orders={client.orders.length} />
             </div>
           )}
         </div>

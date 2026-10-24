@@ -7,17 +7,21 @@ import { Monogram } from "@/components/monogram";
 import { PhoneLink } from "@/components/phone-link";
 import { Badge } from "@/components/ui/badge";
 import { canAdminister, canDelete, canEdit } from "@/lib/auth/permissions";
+import { splitsByCurrency } from "@/modules/payments/aggregate";
+import { CHARGE_ROWS, chargesLabel, splitLabel } from "@/modules/payments/charges";
 import { requireUser } from "@/lib/auth/session";
 import { formatCode } from "@/lib/codes";
 import { formatDay, getToday } from "@/lib/date";
 import { formatMoney } from "@/lib/money";
 import { getSettings, requireModule } from "@/lib/settings";
+import { plural } from "@/lib/text";
 import { cn } from "@/lib/utils";
 import { BalanceText } from "@/modules/payments/components/balance-text";
 import { DebtCardActions } from "@/modules/payments/components/debt-card-actions";
+import { DebtNote } from "@/modules/payments/components/debt-note";
 import { PaymentRowActions } from "@/modules/payments/components/payment-row-actions";
 import { SupplierHeaderActions } from "@/modules/payments/components/supplier-header-actions";
-import { DEBT_KIND_LABELS, PAYMENT_METHOD_LABELS } from "@/modules/payments/labels";
+import { PAYMENT_METHOD_LABELS } from "@/modules/payments/labels";
 import {
   getCaptureOptions,
   getSupplier,
@@ -46,6 +50,8 @@ export default async function SupplierPage({ params }: PageProps<"/proveedores/[
     getSettings(),
   ]);
   const openDebts = debts.filter((d) => !d.isSettled);
+  // Lo que le debes, partido en metal y hechura (una entrada por moneda).
+  const owedByRow = splitsByCurrency(debts.map((debt) => ({ currency: debt.currency, balance: debt.balance })));
   const today = getToday();
   const defaultMethod = settings.defaultPaymentMethod;
 
@@ -63,7 +69,7 @@ export default async function SupplierPage({ params }: PageProps<"/proveedores/[
           <h1 className="text-[1.625rem] leading-tight font-bold tracking-tight">{supplier.name}</h1>
           <p className="flex flex-wrap items-center gap-1.5 text-sm">
             <span className="stamp">{formatCode("supplier", supplier.code)}</span>
-            {supplier.category && <Badge variant="secondary">{supplier.category.name}</Badge>}
+            <Badge variant="secondary">{chargesLabel(supplier)}</Badge>
             {!supplier.isActive && <Badge variant="destructive">Desactivado</Badge>}
           </p>
         </div>
@@ -81,17 +87,29 @@ export default async function SupplierPage({ params }: PageProps<"/proveedores/[
         <p className="text-plata-ink/70 mt-1 text-sm">
           {openDebts.length === 0
             ? "Sin adeudos abiertos."
-            : `${openDebts.length} adeudo${openDebts.length > 1 ? "s" : ""} abierto${openDebts.length > 1 ? "s" : ""}.`}
+            : `${plural(openDebts.length, "adeudo abierto", "adeudos abiertos")}.`}
         </p>
+        {/* De lo que debe, cuánto es metal y cuánto hechura. */}
+        {Object.entries(owedByRow).map(([currency, split]) => (
+          <dl key={currency} className="plate-rule mt-3 grid grid-cols-2 gap-3 border-t pt-3">
+            {CHARGE_ROWS.map((row, index) => (
+              <div key={row.key} className={cn("min-w-0", index > 0 && "plate-rule border-l pl-3")}>
+                <dt className="text-[0.6875rem] font-bold tracking-[0.12em] text-plata-ink/70 uppercase">{row.label}</dt>
+                <dd className="font-heading truncate text-lg tabular-nums">{formatMoney(split[row.key], currency)}</dd>
+              </div>
+            ))}
+          </dl>
+        ))}
       </section>
 
       {/* ─── Qué hacer y cómo contactarlo ──────────────────────────────── */}
       <section className="mb-7 space-y-3">
         <SupplierHeaderActions
-          supplier={{ ...supplier, categoryId: supplier.category?.id ?? null }}
+          supplier={supplier}
           options={options}
           defaultMethod={defaultMethod}
           canToggleActive={canAdminister(user)}
+          counts={{ debts: debts.length, payments: statement.filter((entry) => entry.payment).length }}
         />
         <dl className="text-sm sm:flex sm:flex-wrap sm:gap-x-6 sm:gap-y-1">
           {supplier.contactName && (
@@ -137,65 +155,24 @@ export default async function SupplierPage({ params }: PageProps<"/proveedores/[
             Adeudos abiertos
           </h2>
           <ul className="grid gap-3 md:grid-cols-2">
-            {openDebts.map((debt) => {
-              const progress = Math.min(100, (Number(debt.paid) / Number(debt.amount)) * 100);
-              const overdue = debt.dueDate !== null && debt.dueDate < today;
-              return (
-                <li key={debt.id} className="bg-card shadow-toga space-y-3 rounded-2xl p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
-                      <span className="stamp">{formatCode("debt", debt.code)}</span>
-                      <span>
-                        {DEBT_KIND_LABELS[debt.kind]} · {formatDay(debt.date, "d MMM yyyy")}
-                        {debt.supplierRef && ` · ${debt.supplierRef}`}
-                      </span>
-                    </p>
-                    <DebtCardActions
-                      debt={debt}
-                      supplierId={id}
-                      supplierName={supplier.name}
-                      options={options}
-                      defaultMethod={defaultMethod}
-                      canEdit={canEdit(user, debt)}
-                      canDelete={canDelete(user, debt)}
-                    />
-                  </div>
-                  {/* La descripción a todo lo ancho: es lo que identifica al adeudo. */}
-                  <div className="space-y-0.5">
-                    <p className="leading-snug font-bold">{debt.description}</p>
-                    {debt.dueDate && (
-                      <p className={cn("text-sm", overdue ? "text-destructive font-bold" : "text-muted-foreground")}>
-                        {overdue ? "Venció" : "Vence"} el {formatDay(debt.dueDate)}
-                      </p>
-                    )}
-                  </div>
-                  <div
-                    className="bg-muted h-2 overflow-hidden rounded-full"
-                    role="progressbar"
-                    aria-valuenow={Math.round(progress)}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-label={`Pagado ${Math.round(progress)}%`}
-                  >
-                    <div className="bg-toga-green h-full" style={{ width: `${progress}%` }} />
-                  </div>
-                  <dl className="grid grid-cols-3 gap-2 text-sm">
-                    <div>
-                      <dt className="text-muted-foreground text-xs">Total</dt>
-                      <dd className="tabular-nums">{formatMoney(debt.amount, debt.currency)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-muted-foreground text-xs">Abonado</dt>
-                      <dd className="tabular-nums">{formatMoney(debt.paid, debt.currency)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-muted-foreground text-xs">Saldo</dt>
-                      <dd className="font-bold tabular-nums">{formatMoney(debt.balance, debt.currency)}</dd>
-                    </div>
-                  </dl>
-                </li>
-              );
-            })}
+            {openDebts.map((debt) => (
+              <DebtNote
+                key={debt.id}
+                debt={debt}
+                today={today}
+                actions={
+                  <DebtCardActions
+                    debt={debt}
+                    supplierId={id}
+                    supplierName={supplier.name}
+                    options={options}
+                    defaultMethod={defaultMethod}
+                    canEdit={canEdit(user, debt)}
+                    canDelete={canDelete(user, debt)}
+                  />
+                }
+              />
+            ))}
           </ul>
         </section>
       )}
@@ -229,6 +206,7 @@ export default async function SupplierPage({ params }: PageProps<"/proveedores/[
                       {entry.type === "ABONO" && entry.debtCode && ` → ${formatCode("debt", entry.debtCode)}`}
                       {entry.paymentMethod && ` · ${PAYMENT_METHOD_LABELS[entry.paymentMethod]}`}
                     </p>
+                    <p className="text-muted-foreground text-xs">{splitLabel(entry.split, entry.currency)}</p>
                   </div>
                   <div className="shrink-0 text-right">
                     <p className={cn("font-bold tabular-nums", isDebt ? "text-destructive" : entry.type === "ABONO" && "text-toga-green-strong")}>

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ChevronRight, Search, Truck } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { Monogram } from "@/components/monogram";
+import { chargesLabel } from "@/modules/payments/charges";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +14,7 @@ import { formatCode } from "@/lib/codes";
 import { cn } from "@/lib/utils";
 import { BalanceText } from "@/modules/payments/components/balance-text";
 import { NewSupplierButton } from "@/modules/payments/components/new-supplier-button";
-import { getCaptureOptions, listSuppliers } from "@/modules/payments/queries";
+import { listSuppliers } from "@/modules/payments/queries";
 
 export const metadata: Metadata = { title: "Proveedores" };
 
@@ -24,17 +25,15 @@ export default async function SuppliersPage({ searchParams }: PageProps<"/provee
   const search = typeof params.q === "string" ? params.q : "";
   const showInactive = canAdminister(user) && params.inactivos === "1";
 
-  const [suppliers, options] = await Promise.all([
-    listSuppliers({ search, includeInactive: showInactive }),
-    getCaptureOptions(),
-  ]);
+  // Ya no hace falta getCaptureOptions: el alta de proveedor usa casillas, no catálogo.
+  const suppliers = await listSuppliers({ search, includeInactive: showInactive });
 
   return (
     <>
       <PageHeader
         title="Proveedores"
         description="Toca un proveedor para ver su estado de cuenta, registrar adeudos y abonos."
-        actions={<NewSupplierButton categories={options.supplierCategories} />}
+        actions={<NewSupplierButton />}
       />
 
       <form className="mb-4 flex gap-2" role="search">
@@ -72,7 +71,7 @@ export default async function SuppliersPage({ searchParams }: PageProps<"/provee
           icon={Truck}
           title={search ? `Ningún proveedor coincide con «${search}»` : "Todavía no hay proveedores"}
           description={search ? "Revisa cómo está escrito o búscalo por teléfono." : "Da de alta al primero. Si ya le debes algo, puedes registrarlo en el mismo paso."}
-          action={!search && <NewSupplierButton categories={options.supplierCategories} />}
+          action={!search && <NewSupplierButton />}
         />
       ) : (
         <ul className="bg-card shadow-toga divide-y overflow-hidden rounded-2xl">
@@ -88,7 +87,7 @@ export default async function SuppliersPage({ searchParams }: PageProps<"/provee
                   </p>
                   <p className="text-muted-foreground mt-0.5 truncate text-[0.8125rem]">
                     {formatCode("supplier", s.code)}
-                    {s.categoryName && ` · ${s.categoryName}`}
+                    {` · ${chargesLabel(s)}`}
                     {s.contactName && ` · ${s.contactName}`}
                   </p>
                 </div>

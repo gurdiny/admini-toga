@@ -1,14 +1,13 @@
 // Panel de administración en celular (390 px): permisos, catálogos, clientes
 // (fusionar), usuarios (alta, login real, último dueño, desactivar),
 // auditoría, configuración (módulos) y papelera (restaurar).
-const { chromium } = require("playwright-core");
-const { CHROME, B, shots, log } = require("./config.cjs");
+const { launchBrowser, B, shots, log } = require("./config.cjs");
 
 const MOBILE = { viewport: { width: 390, height: 844 }, hasTouch: true, locale: "es-MX" };
 const E2E_EMAIL = "empleado.e2e@joyeria.local";
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: CHROME, headless: true });
+  const browser = await launchBrowser();
   const page = await (await browser.newContext(MOBILE)).newPage();
   page.setDefaultTimeout(15000);
   const go = async (path) => {
@@ -67,7 +66,7 @@ const E2E_EMAIL = "empleado.e2e@joyeria.local";
     await dialog.getByLabel("Proveedor").fill("Taller de Engaste");
     await dialog.getByRole("button", { name: /^Taller de Engaste/ }).first().click();
     await dialog.getByText("Pago de contado", { exact: true }).click();
-    await dialog.getByLabel("Monto").fill("10");
+    await dialog.getByLabel("Mano de obra", { exact: true }).fill("10");
     await dialog.getByLabel("Concepto").fill("E2E con categoría nueva");
     await dialog.getByRole("combobox", { name: "Categoría" }).click();
     await page.getByRole("option", { name: "Plata E2E" }).click();

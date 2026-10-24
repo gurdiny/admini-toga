@@ -2,8 +2,7 @@
 // (folio automático) y existente, calendario sin días pasados, checkbox
 // optimista, deshacer, ver detalle, permisos de Mostrador y Dueño, y
 // «Cambiar fecha» del mostrador en pedidos de otro día.
-const { chromium } = require("playwright-core");
-const { CHROME, B, shots, log, pickDay, sql } = require("./config.cjs");
+const { launchBrowser, B, shots, log, pickDay, sql } = require("./config.cjs");
 
 const MOBILE = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: "es-MX" };
 /** Día de México con desfase: "2026-10-03" para ayer. */
@@ -13,7 +12,7 @@ const mxDay = (offset) => {
 };
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: CHROME, headless: true });
+  const browser = await launchBrowser();
   const staff = await (await browser.newContext(MOBILE)).newPage();
   const owner = await (await browser.newContext(MOBILE)).newPage();
   for (const page of [staff, owner]) page.setDefaultTimeout(15000);

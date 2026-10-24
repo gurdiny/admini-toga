@@ -16,6 +16,7 @@ import { formatDay } from "@/lib/date";
 import { formatMoney, formatMXN } from "@/lib/money";
 import { getSettings, requireModule } from "@/lib/settings";
 import { cn } from "@/lib/utils";
+import { splitLabel } from "@/modules/payments/charges";
 import { BalanceText } from "@/modules/payments/components/balance-text";
 import { NewPaymentButton } from "@/modules/payments/components/new-payment-button";
 import { PaymentRowActions } from "@/modules/payments/components/payment-row-actions";
@@ -158,7 +159,8 @@ export default async function PaymentsPage({ searchParams }: PageProps<"/pagos">
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex items-start justify-between gap-3">
                       {/* Nombres de negocio largos: hasta dos líneas antes de cortar. */}
-                      <Link href={`/proveedores/${p.supplierId}`} className="-my-2 block min-w-0 py-2 leading-snug font-bold">
+                      {/* py-2.5: con el nombre en una sola línea, py-2 dejaba el enlace en 38 px. */}
+                      <Link href={`/proveedores/${p.supplierId}`} className="-my-2.5 block min-w-0 py-2.5 leading-snug font-bold">
                         {/* El recorte va en el span: si fuera en el enlace, su relleno táctil dejaría asomar la tercera línea. */}
                         <span className="line-clamp-2">{p.supplierName}</span>
                       </Link>
@@ -168,6 +170,7 @@ export default async function PaymentsPage({ searchParams }: PageProps<"/pagos">
                     <p className="text-muted-foreground text-xs">
                       {formatDay(p.date, "EEE d MMM")} · {PAYMENT_METHOD_LABELS[p.paymentMethod]} · {formatCode("payment", p.code)}
                     </p>
+                    <p className="text-muted-foreground text-xs">{splitLabel({ metal: p.amountMetal, labor: p.amountLabor }, p.currency)}</p>
                     <div className="flex flex-wrap items-center gap-2 pt-0.5">
                       <CategoryChip name={p.categoryName} color={p.categoryColor} />
                       <DebtBadge payment={p} />
@@ -214,7 +217,10 @@ export default async function PaymentsPage({ searchParams }: PageProps<"/pagos">
                         <CategoryChip name={p.categoryName} color={p.categoryColor} />
                       </TableCell>
                       <TableCell>{PAYMENT_METHOD_LABELS[p.paymentMethod]}</TableCell>
-                      <TableCell className="text-right font-bold tabular-nums">{formatMoney(p.amount, p.currency)}</TableCell>
+                      <TableCell className="text-right font-bold tabular-nums">
+                        {formatMoney(p.amount, p.currency)}
+                        <span className="text-muted-foreground block text-xs font-normal">{splitLabel({ metal: p.amountMetal, labor: p.amountLabor }, p.currency)}</span>
+                      </TableCell>
                       <TableCell>
                         <Actions payment={p} user={user} options={options} defaultMethod={settings.defaultPaymentMethod} />
                       </TableCell>

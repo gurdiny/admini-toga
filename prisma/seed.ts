@@ -71,19 +71,23 @@ async function main() {
 
   // ─── Proveedores ───────────────────────────────────────────────────────
   // Contacto variado a propósito: hay proveedores sin teléfono ni WhatsApp.
+  // Qué se le paga a cada uno: los que entregan piezas terminadas cobran metal
+  // y hechura; los talleres de engaste y pulido solo hechura.
   const suppliers = [
-    ["Platería Taxco Hernández", "Joyería", "Don Ernesto", "55 1234 5678", true],
-    ["Cadenas y Eslabones del Centro", "Joyería", "Sra. Marisol", "55 2345 6789", false],
-    ["Aretes y Dijes Guadalajara", "Joyería", null, "33 3456 7890", true],
-    ["Taller de Engaste Ruiz", "Mano de obra", "Lupita Ruiz", null, false],
-    ["Soldadura y Pulido Méndez", "Mano de obra", null, null, false],
+    ["Platería Taxco Hernández", "Joyería", true, true, "Don Ernesto", "55 1234 5678", true],
+    ["Cadenas y Eslabones del Centro", "Joyería", true, true, "Sra. Marisol", "55 2345 6789", false],
+    ["Aretes y Dijes Guadalajara", "Joyería", true, true, null, "33 3456 7890", true],
+    ["Taller de Engaste Ruiz", "Mano de obra", false, true, "Lupita Ruiz", null, false],
+    ["Soldadura y Pulido Méndez", "Mano de obra", false, true, null, null, false],
   ] as const;
   const sup: Record<string, string> = {};
-  for (const [name, category, contactName, phone, hasWhatsApp] of suppliers) {
+  for (const [name, category, chargesMetal, chargesLabor, contactName, phone, hasWhatsApp] of suppliers) {
     const nameKey = toNameKey(name);
     const data = {
       name,
       categoryId: supCat[category],
+      chargesMetal,
+      chargesLabor,
       contactName,
       phone: normalizePhoneMX(phone),
       hasWhatsApp,
@@ -140,10 +144,12 @@ async function main() {
   // Adeudos: saldo inicial de un proveedor que ya se debía al empezar a usar
   // el sistema, un crédito ya liquidado seguido de uno nuevo, y uno a medias.
   const debts = [
-    { key: "taxco-inicial", day: -40, supplier: "Platería Taxco Hernández", kind: "OPENING_BALANCE", category: "Anillos", description: "Saldo pendiente al dar de alta al proveedor", amount: "50000.00", ref: null, due: null },
-    { key: "cadenas-lote", day: -10, supplier: "Cadenas y Eslabones del Centro", kind: "CREDIT", category: "Cadenas", description: "Lote de 40 cadenas de plata .925", amount: "25000.00", ref: "NR-2231", due: 20 },
-    { key: "aretes-argollas", day: -6, supplier: "Aretes y Dijes Guadalajara", kind: "CREDIT", category: "Aretes", description: "12 pares de argollas de plata", amount: "950.00", ref: null, due: null },
-    { key: "aretes-dijes", day: -2, supplier: "Aretes y Dijes Guadalajara", kind: "CREDIT", category: "Dijes", description: "Lote de 30 dijes de plata", amount: "3000.00", ref: "F-118", due: 15 },
+    { key: "taxco-inicial", day: -40, supplier: "Platería Taxco Hernández", kind: "OPENING_BALANCE", category: "Anillos", description: "Saldo pendiente al dar de alta al proveedor", metal: "38000.00", labor: "12000.00", ref: null, due: null },
+    { key: "cadenas-lote", day: -10, supplier: "Cadenas y Eslabones del Centro", kind: "CREDIT", category: "Cadenas", description: "Lote de 40 cadenas de plata .925", metal: "20000.00", labor: "5000.00", ref: "NR-2231", due: 20 },
+    { key: "aretes-argollas", day: -6, supplier: "Aretes y Dijes Guadalajara", kind: "CREDIT", category: "Aretes", description: "12 pares de argollas de plata", metal: "950.00", labor: "0", ref: null, due: null },
+    { key: "aretes-dijes", day: -2, supplier: "Aretes y Dijes Guadalajara", kind: "CREDIT", category: "Dijes", description: "Lote de 30 dijes de plata", metal: "2400.00", labor: "600.00", ref: "F-118", due: 15 },
+    // Un taller que solo cobra hechura: su nota no lleva renglón de metal.
+    { key: "engaste-lote", day: -5, supplier: "Taller de Engaste Ruiz", kind: "CREDIT", category: "Anillos", description: "Engaste de circonias en 40 anillos", metal: "0", labor: "4500.00", ref: null, due: 10 },
   ] as const;
   const debt: Record<string, string> = {};
   for (const d of debts) {
@@ -153,7 +159,9 @@ async function main() {
         kind: d.kind,
         date: mxDay(d.day),
         description: d.description,
-        amount: new Prisma.Decimal(d.amount),
+        amount: new Prisma.Decimal(d.metal).add(d.labor),
+        amountMetal: new Prisma.Decimal(d.metal),
+        amountLabor: new Prisma.Decimal(d.labor),
         categoryId: payCat[d.category],
         supplierRef: d.ref,
         dueDate: d.due === null ? null : mxDay(d.due),
@@ -165,16 +173,17 @@ async function main() {
 
   // debt: null = pago de contado. Casi todo en efectivo, como en el negocio.
   const payments = [
-    { day: -35, supplier: "Platería Taxco Hernández", category: "Anillos", concept: "Abono a saldo inicial", amount: "21400.00", method: "EFECTIVO", debt: "taxco-inicial", order: null },
-    { day: -1, supplier: "Platería Taxco Hernández", category: "Pulseras", concept: "Abono a saldo inicial", amount: "1450.50", method: "EFECTIVO", debt: "taxco-inicial", order: 1 },
-    { day: 0, supplier: "Platería Taxco Hernández", category: "Anillos", concept: "Abono: anillo de compromiso", amount: "12850.00", method: "TRANSFERENCIA", debt: "taxco-inicial", order: 0 },
-    { day: -4, supplier: "Cadenas y Eslabones del Centro", category: "Cadenas", concept: "Anticipo lote de cadenas", amount: "18500.00", method: "EFECTIVO", debt: "cadenas-lote", order: null },
-    { day: -3, supplier: "Aretes y Dijes Guadalajara", category: "Aretes", concept: "Liquidación argollas", amount: "950.00", method: "EFECTIVO", debt: "aretes-argollas", order: null },
-    { day: 0, supplier: "Taller de Engaste Ruiz", category: "Mano de obra", concept: "Engaste de circonias en anillo", amount: "1800.00", method: "EFECTIVO", debt: null, order: 0 },
-    { day: -1, supplier: "Soldadura y Pulido Méndez", category: "Mano de obra", concept: "Soldadura de 8 cadenas", amount: "640.00", method: "EFECTIVO", debt: null, order: null },
-    { day: -12, supplier: "Taller de Engaste Ruiz", category: "Mano de obra", concept: "Grabado de 5 placas", amount: "750.00", method: "EFECTIVO", debt: null, order: 1 },
-    { day: -20, supplier: "Soldadura y Pulido Méndez", category: "Mano de obra", concept: "Pulido de 30 piezas", amount: "900.00", method: "EFECTIVO", debt: null, order: null },
-    { day: -8, supplier: "Cadenas y Eslabones del Centro", category: "Cadenas", concept: "Abono lote de cadenas", amount: "3000.00", method: "EFECTIVO", debt: "cadenas-lote", order: null },
+    { day: -35, supplier: "Platería Taxco Hernández", category: "Anillos", concept: "Abono a saldo inicial", metal: "18000.00", labor: "3400.00", method: "EFECTIVO", debt: "taxco-inicial", order: null },
+    { day: -1, supplier: "Platería Taxco Hernández", category: "Pulseras", concept: "Abono a saldo inicial", metal: "1450.50", labor: "0", method: "EFECTIVO", debt: "taxco-inicial", order: 1 },
+    { day: 0, supplier: "Platería Taxco Hernández", category: "Anillos", concept: "Abono: anillo de compromiso", metal: "10000.00", labor: "2850.00", method: "TRANSFERENCIA", debt: "taxco-inicial", order: 0 },
+    { day: -4, supplier: "Cadenas y Eslabones del Centro", category: "Cadenas", concept: "Anticipo lote de cadenas", metal: "15000.00", labor: "3500.00", method: "EFECTIVO", debt: "cadenas-lote", order: null },
+    { day: -3, supplier: "Aretes y Dijes Guadalajara", category: "Aretes", concept: "Liquidación argollas", metal: "950.00", labor: "0", method: "EFECTIVO", debt: "aretes-argollas", order: null },
+    { day: -2, supplier: "Taller de Engaste Ruiz", category: "Anillos", concept: "Abono al engaste de anillos", metal: "0", labor: "1500.00", method: "EFECTIVO", debt: "engaste-lote", order: null },
+    { day: 0, supplier: "Taller de Engaste Ruiz", category: "Anillos", concept: "Engaste de circonias en anillo", metal: "0", labor: "1800.00", method: "EFECTIVO", debt: null, order: 0 },
+    { day: -1, supplier: "Soldadura y Pulido Méndez", category: "Cadenas", concept: "Soldadura de 8 cadenas", metal: "0", labor: "640.00", method: "EFECTIVO", debt: null, order: null },
+    { day: -12, supplier: "Taller de Engaste Ruiz", category: "Otros", concept: "Grabado de 5 placas", metal: "0", labor: "750.00", method: "EFECTIVO", debt: null, order: 1 },
+    { day: -20, supplier: "Soldadura y Pulido Méndez", category: "Otros", concept: "Pulido de 30 piezas", metal: "0", labor: "900.00", method: "EFECTIVO", debt: null, order: null },
+    { day: -8, supplier: "Cadenas y Eslabones del Centro", category: "Cadenas", concept: "Abono lote de cadenas", metal: "3000.00", labor: "0", method: "EFECTIVO", debt: "cadenas-lote", order: null },
   ] as const;
   for (const p of payments) {
     await db.supplierPayment.create({
@@ -183,7 +192,9 @@ async function main() {
         supplierId: sup[p.supplier],
         categoryId: payCat[p.category],
         concept: p.concept,
-        amount: new Prisma.Decimal(p.amount),
+        amount: new Prisma.Decimal(p.metal).add(p.labor),
+        amountMetal: new Prisma.Decimal(p.metal),
+        amountLabor: new Prisma.Decimal(p.labor),
         paymentMethod: p.method,
         debtId: p.debt === null ? null : debt[p.debt],
         orderId: p.order === null ? null : orders[p.order],

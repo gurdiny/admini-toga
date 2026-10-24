@@ -2,14 +2,15 @@
 
 import { z } from "zod";
 import { defineAction } from "@/lib/action";
-import { withAudit } from "@/lib/audit";
+import { recordAudit, withAudit } from "@/lib/audit";
 import { canDelete, canEdit, DELETE_DENIED_MESSAGE, EDIT_DENIED_MESSAGE } from "@/lib/auth/permissions";
 import { formatCode } from "@/lib/codes";
 import { BusinessError } from "@/lib/errors";
+import { plural } from "@/lib/text";
 import { zId } from "@/lib/validation";
 import type { Prisma } from "@/generated/prisma/client";
 import { getSupplierDebts } from "../queries";
-import { debtSchema, idSchema } from "../schemas";
+import { debtSchema, deleteSchema, updateDebtSchema } from "../schemas";
 
 const REVALIDATE = ["/proveedores", "/pagos"];
 
@@ -41,7 +42,7 @@ export const createDebt = defineAction(
 );
 
 export const updateDebt = defineAction(
-  { role: "STAFF", schema: z.intersection(debtSchema, z.object({ id: zId("El adeudo") })), revalidate: REVALIDATE },
+  { role: "STAFF", schema: updateDebtSchema, revalidate: REVALIDATE },
   // El proveedor no se cambia: sus abonos están amarrados a él.
   async ({ id, supplierId: _ignored, ...data }, { user }) => {
     await withAudit(
@@ -57,20 +58,42 @@ export const updateDebt = defineAction(
   },
 );
 
+/**
+ * Borra una nota completa. Si tiene abonos, se van con ella (primero los
+ * abonos: así el trigger ADEUDO_CON_ABONOS ya no ve ninguno vigente). La
+ * casilla `confirm` es el visto bueno de quien borra; sin ella no se toca
+ * nada. Todo queda en la papelera, con un renglón de auditoría por registro.
+ */
 export const softDeleteDebt = defineAction(
-  { role: "STAFF", schema: idSchema, revalidate: REVALIDATE },
-  async ({ id }, { user }) => {
+  { role: "STAFF", schema: deleteSchema, revalidate: REVALIDATE },
+  async ({ id, confirm }, { user }) => {
     await withAudit(
       { userId: user.id, action: "DELETE", entity: "SupplierDebt", before: (tx) => tx.supplierDebt.findUnique({ where: { id } }) },
       async (tx) => {
         const debt = await findDebtOrFail(tx, id);
         if (!canDelete(user, debt)) throw new BusinessError(DELETE_DENIED_MESSAGE);
-        const abonos = await tx.supplierPayment.count({ where: { debtId: id, deletedAt: null } });
-        if (abonos > 0) {
-          throw new BusinessError(
-            `El adeudo ${formatCode("debt", debt.code)} tiene ${abonos} abono(s). Bórralos primero.`,
-          );
+        const ref = formatCode("debt", debt.code);
+
+        const abonos = await tx.supplierPayment.findMany({ where: { debtId: id, deletedAt: null } });
+        if (abonos.length) {
+          if (!confirm) {
+            throw new BusinessError(
+              `El adeudo ${ref} tiene ${plural(abonos.length, "abono", "abonos")}. Marca la casilla para borrarlo junto con ellos.`,
+            );
+          }
+          // Quien no puede borrar un abono tampoco puede llevárselo de paso.
+          if (abonos.some((abono) => !canDelete(user, abono))) {
+            throw new BusinessError(
+              `El adeudo ${ref} tiene abonos de otro día o de otra persona. Pide al dueño que lo borre.`,
+            );
+          }
+          const now = new Date();
+          for (const abono of abonos) {
+            const after = await tx.supplierPayment.update({ where: { id: abono.id }, data: { deletedAt: now } });
+            await recordAudit(tx, { userId: user.id, action: "DELETE", entity: "SupplierPayment", before: abono, after });
+          }
         }
+
         return tx.supplierDebt.update({ where: { id }, data: { deletedAt: new Date() } });
       },
     );

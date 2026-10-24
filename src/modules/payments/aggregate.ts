@@ -19,6 +19,66 @@ function toBalances(map: Map<string, Decimal>): Balances {
   return out;
 }
 
+// ─── Los dos renglones de la nota ──────────────────────────────────────────
+// Metal y hechura se suman por separado y nunca se compensan entre sí: el
+// total es solo la suma de los dos, calculado con Decimal.
+
+/** Metal, mano de obra y su total, como texto para pasar al cliente. */
+export type Split = { metal: string; labor: string; total: string };
+
+/** Una fila de la base (nota o pago) con sus dos renglones. */
+export type SplitRow = { amountMetal: MoneyInput; amountLabor: MoneyInput };
+
+export const ZERO_SPLIT: Split = { metal: "0.00", labor: "0.00", total: "0.00" };
+
+export function toSplit(metal: MoneyInput, labor: MoneyInput): Split {
+  const m = toDecimal(metal);
+  const l = toDecimal(labor);
+  return { metal: moneyToString(m), labor: moneyToString(l), total: moneyToString(m.add(l)) };
+}
+
+/** Suma renglón por renglón: los abonos de una nota, las notas de un proveedor. */
+export function sumSplits(rows: readonly SplitRow[]): Split {
+  let metal = ZERO;
+  let labor = ZERO;
+  for (const row of rows) {
+    metal = metal.add(toDecimal(row.amountMetal));
+    labor = labor.add(toDecimal(row.amountLabor));
+  }
+  return toSplit(metal, labor);
+}
+
+/** Lo que falta de una nota: su monto menos lo abonado, renglón por renglón. */
+export function subtractSplit(total: Split, paid: Split): Split {
+  return toSplit(toDecimal(total.metal).sub(paid.metal), toDecimal(total.labor).sub(paid.labor));
+}
+
+/** Una nota está liquidada cuando ninguno de sus dos renglones debe nada. */
+export function isSplitSettled(balance: Split): boolean {
+  return toDecimal(balance.metal).lte(0) && toDecimal(balance.labor).lte(0);
+}
+
+/**
+ * Saldo por renglón agrupado por moneda: nunca se mezclan pesos con dólares.
+ * Los saldos en cero no aparecen.
+ */
+export function splitsByCurrency(rows: readonly { currency: string; balance: Split }[]): Record<string, Split> {
+  const byCurrency = new Map<string, { metal: Decimal; labor: Decimal }>();
+  for (const row of rows) {
+    const sums = byCurrency.get(row.currency) ?? { metal: ZERO, labor: ZERO };
+    byCurrency.set(row.currency, {
+      metal: sums.metal.add(toDecimal(row.balance.metal)),
+      labor: sums.labor.add(toDecimal(row.balance.labor)),
+    });
+  }
+  const out: Record<string, Split> = {};
+  for (const [currency, sums] of byCurrency) {
+    if (sums.metal.isZero() && sums.labor.isZero()) continue;
+    out[currency] = toSplit(sums.metal, sums.labor);
+  }
+  return out;
+}
+
 /** Un renglón de `groupBy` por proveedor y moneda. */
 export type SupplierSum = { supplierId: string; currency: string; amount: MoneyInput | null };
 

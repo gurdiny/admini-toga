@@ -6,7 +6,11 @@
 import type { Prisma } from "../src/generated/prisma/client";
 import { DEFAULT_READY_MESSAGE } from "../src/modules/reminders/whatsapp";
 
-/** TOGA solo vende plata .925. De pago: qué se compró o qué trabajo se pagó. */
+/**
+ * TOGA solo vende plata .925. De pago: qué pieza se compró o se trabajó.
+ * Ya no hay categoría «Mano de obra»: cada nota y cada pago dicen por su
+ * cuenta cuánto fue metal y cuánto hechura (ver src/modules/payments/charges.ts).
+ */
 export const PAYMENT_CATEGORIES = [
   ["Anillos", "#c23d73"],
   ["Aretes", "#d67da1"],
@@ -14,7 +18,6 @@ export const PAYMENT_CATEGORIES = [
   ["Cadenas", "#6a5acd"],
   ["Collares", "#4f6b24"],
   ["Dijes", "#90ac53"],
-  ["Mano de obra", "#aa3a3e"],
   ["Otros", "#737373"],
 ] as const;
 

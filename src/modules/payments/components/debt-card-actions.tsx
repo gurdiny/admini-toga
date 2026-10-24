@@ -7,6 +7,8 @@ import { RowMenu } from "@/components/row-menu";
 import { Button } from "@/components/ui/button";
 import { useAction } from "@/hooks/use-action";
 import { formatCode } from "@/lib/codes";
+import { formatMoney } from "@/lib/money";
+import { plural } from "@/lib/text";
 import type { PaymentMethod } from "@/generated/prisma/browser";
 import { softDeleteDebt } from "../actions/debts";
 import type { CaptureOptions, DebtSummary } from "../queries";
@@ -27,6 +29,7 @@ export function DebtCardActions({ debt, supplierId, supplierName, options, defau
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const code = formatCode("debt", debt.code);
+  const abonos = debt.payments.length;
   const remove = useAction(softDeleteDebt, { success: `Adeudo ${code} borrado.`, onSuccess: () => setDeleting(false) });
 
   return (
@@ -58,7 +61,7 @@ export function DebtCardActions({ debt, supplierId, supplierName, options, defau
           supplierName={supplierName}
           categories={options.paymentCategories}
           defaultCurrency={options.defaults.currency}
-          debt={debt}
+          debt={{ ...debt, amountMetal: debt.amounts.metal, amountLabor: debt.amounts.labor }}
         />
       )}
       <ConfirmDialog
@@ -66,12 +69,21 @@ export function DebtCardActions({ debt, supplierId, supplierName, options, defau
         onOpenChange={setDeleting}
         title={`¿Borrar el adeudo ${code}?`}
         description={
-          Number(debt.paid) > 0
-            ? "Este adeudo tiene abonos. Primero borra sus abonos; si no, no se podrá borrar."
-            : `${debt.description}. Dejará de contar en lo que le debes al proveedor.`
+          <>
+            {debt.description}. Dejará de contar en lo que le debes al proveedor.
+            {abonos > 0 && (
+              <>
+                {" "}
+                Tiene <strong>{plural(abonos, "abono", "abonos")}</strong> por{" "}
+                {formatMoney(debt.paid.total, debt.currency)}, que se borran junto con él.
+              </>
+            )}{" "}
+            Todo se puede restaurar desde la papelera.
+          </>
         }
+        requireCheck={abonos > 0 ? `Sí, borra el adeudo ${code} y sus ${plural(abonos, "abono", "abonos")}.` : null}
         pending={remove.pending}
-        onConfirm={() => remove.run({ id: debt.id })}
+        onConfirm={(confirmed) => remove.run({ id: debt.id, confirm: confirmed })}
       />
     </div>
   );

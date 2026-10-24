@@ -1,9 +1,8 @@
-const { chromium } = require("playwright-core");
-const { CHROME, B, shots, log, pickDay } = require("./config.cjs");
+const { launchBrowser, B, shots, log, pickDay } = require("./config.cjs");
 const money = (text) => Number(text.replace(/[^\d.]/g, ""));
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: CHROME, headless: true });
+  const browser = await launchBrowser();
   const page = await browser.newPage({ viewport: { width: 1280, height: 1000 }, locale: "es-MX" });
   page.setDefaultTimeout(15000);
   const kpi = async (label) => (await page.getByText(label, { exact: true }).locator("xpath=following-sibling::p[1]").innerText()).trim();
@@ -14,10 +13,11 @@ const money = (text) => Number(text.replace(/[^\d.]/g, ""));
     await dialog.getByLabel("Proveedor").fill(supplier);
     await dialog.getByRole("button", { name: new RegExp(`^${supplier}`) }).first().click();
     await dialog.getByText("Pago de contado", { exact: true }).click();
-    await dialog.getByLabel("Monto").fill(String(amount));
+    // Un taller cobra hechura: el pago va en el renglón de mano de obra.
+    await dialog.getByLabel("Mano de obra", { exact: true }).fill(String(amount));
     await dialog.getByLabel("Concepto").fill(concept);
     await dialog.getByRole("combobox", { name: "Categoría" }).click();
-    await page.getByRole("option", { name: "Mano de obra" }).click();
+    await page.getByRole("option", { name: "Otros" }).click();
     if (day === "ayer") await dialog.getByRole("button", { name: "Ayer" }).click();
     else if (typeof day === "string") await pickDay(page, dialog.getByLabel("Fecha del pago"), day);
     await dialog.getByRole("button", { name: "Registrar pago" }).click();
@@ -63,10 +63,10 @@ const money = (text) => Number(text.replace(/[^\d.]/g, ""));
     dialog = page.getByRole("dialog", { name: "Registrar pago" });
     log(await dialog.getByRole("button", { name: "Cambiar: Orfebrería Nueva E2E" }).isVisible(), "Queda seleccionado en el pago");
     log(await dialog.getByText("Este proveedor no tiene adeudos abiertos.").isVisible(), "Sin adeudos → pago de contado");
-    await dialog.getByLabel("Monto").fill("50");
+    await dialog.getByLabel("Metal", { exact: true }).fill("50");
     await dialog.getByLabel("Concepto").fill("E2E primer pago");
     await dialog.getByRole("combobox", { name: "Categoría" }).click();
-    await page.getByRole("option", { name: "Mano de obra" }).click();
+    await page.getByRole("option", { name: "Otros" }).click();
     await page.screenshot({ path: shots("e2e-pago-form.png") });
     await dialog.getByRole("button", { name: "Registrar pago" }).click();
     await dialog.waitFor({ state: "hidden" });

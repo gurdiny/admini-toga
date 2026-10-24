@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Field, FormError } from "@/components/form/field";
 import { DayInput } from "@/components/form/day-input";
-import { MoneyInput } from "@/components/form/money-input";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,6 +21,12 @@ import { formatCode } from "@/lib/codes";
 import { getToday } from "@/lib/date";
 import { CURRENCIES } from "@/lib/validation";
 import { createDebt, updateDebt } from "../actions/debts";
+import { SplitAmountFields } from "./split-amount-fields";
+
+/** Un renglón en cero se muestra vacío: es más claro que un "0.00". */
+function blankIfZero(value: string | undefined): string {
+  return !value || Number(value) === 0 ? "" : value;
+}
 
 const NONE = "none";
 
@@ -30,7 +35,9 @@ export type DebtFormValues = {
   kind: "OPENING_BALANCE" | "CREDIT";
   date: string;
   description: string;
-  amount: string;
+  /** Los dos renglones de la nota; el total es su suma. */
+  amountMetal: string;
+  amountLabor: string;
   currency: string;
   categoryId: string | null;
   dueDate: string | null;
@@ -77,7 +84,8 @@ function DebtForm({
   const initial = () => ({
     date: debt?.date ?? (getToday() as string),
     description: debt?.description ?? "",
-    amount: debt?.amount ?? "",
+    amountMetal: blankIfZero(debt?.amountMetal),
+    amountLabor: blankIfZero(debt?.amountLabor),
     currency: debt?.currency ?? defaultCurrency,
     categoryId: debt?.categoryId ?? NONE,
     dueDate: debt?.dueDate ?? "",
@@ -130,31 +138,35 @@ function DebtForm({
             <Input id="d-desc" value={values.description} onChange={(e) => set("description", e.target.value)} className="h-11" autoFocus aria-invalid={!!errors.description} />
           </Field>
 
-          <div className="space-y-2">
-            <Field label="Monto total" htmlFor="d-amount" required error={errors.amount}>
-              <MoneyInput id="d-amount" value={values.amount} currency={values.currency} onValueChange={(v) => set("amount", v)} aria-invalid={!!errors.amount} />
+          <SplitAmountFields
+            idPrefix="d"
+            legend="¿De cuánto es cada renglón?"
+            values={{ metal: values.amountMetal, labor: values.amountLabor }}
+            currency={values.currency}
+            onChange={(key, value) => set(key === "metal" ? "amountMetal" : "amountLabor", value)}
+            error={errors.amountMetal ?? errors.amountLabor ?? errors.amount}
+          />
+
+          {showCurrency || values.currency !== "MXN" ? (
+            <Field label="Moneda" htmlFor="d-currency" error={errors.currency}>
+              <Select value={values.currency} onValueChange={(v) => set("currency", v)}>
+                <SelectTrigger id="d-currency" className="h-11 w-full sm:w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CURRENCIES.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
-            {showCurrency || values.currency !== "MXN" ? (
-              <Field label="Moneda" htmlFor="d-currency" error={errors.currency}>
-                <Select value={values.currency} onValueChange={(v) => set("currency", v)}>
-                  <SelectTrigger id="d-currency" className="h-11 w-full sm:w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CURRENCIES.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {c}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-            ) : (
-              <button type="button" className="text-muted-foreground inline-flex min-h-10 items-center text-sm underline underline-offset-4" onClick={() => setShowCurrency(true)}>
-                ¿En dólares?
-              </button>
-            )}
-          </div>
+          ) : (
+            <button type="button" className="text-muted-foreground inline-flex min-h-10 items-center text-sm underline underline-offset-4" onClick={() => setShowCurrency(true)}>
+              ¿En dólares?
+            </button>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Fecha" htmlFor="d-date" required error={errors.date}>

@@ -13,7 +13,9 @@ import { formatDay, type DayKey } from "@/lib/date";
 import { formatMoney } from "@/lib/money";
 import type { PaymentMethod } from "@/generated/prisma/browser";
 import { softDeletePayment } from "../actions/payments";
+import { LABOR_LABEL, METAL_LABEL } from "../charges";
 import { PAYMENT_METHOD_LABELS } from "../labels";
+import { splitTotal } from "./split-amount-fields";
 import type { CaptureOptions, PaymentTrace } from "../queries";
 import { PaymentFormDialog, type PaymentFormValues } from "./payment-form-dialog";
 
@@ -70,7 +72,7 @@ export function PaymentRowActions({ payment, detail, options, defaultMethod, can
         title={`¿Borrar el pago ${code}?`}
         description={
           <>
-            {payment.concept} por <strong>{formatMoney(payment.amount, payment.currency)}</strong>.
+            {payment.concept} por <strong>{formatMoney(paymentTotal(payment), payment.currency)}</strong>.
             {payment.debtId && " El saldo del adeudo vuelve a subir por ese monto."}
           </>
         }
@@ -79,6 +81,11 @@ export function PaymentRowActions({ payment, detail, options, defaultMethod, can
       />
     </>
   );
+}
+
+/** Total del pago: la suma de sus dos renglones. */
+function paymentTotal(payment: Pick<PaymentFormValues, "amountMetal" | "amountLabor">) {
+  return splitTotal({ metal: payment.amountMetal, labor: payment.amountLabor });
 }
 
 function PaymentDetailDialog({
@@ -107,7 +114,7 @@ function PaymentDetailDialog({
         </DialogHeader>
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-2xl font-bold tabular-nums">{formatMoney(payment.amount, payment.currency)}</span>
+          <span className="text-2xl font-bold tabular-nums">{formatMoney(paymentTotal(payment), payment.currency)}</span>
           {detail.debtCode ? (
             <Badge variant="secondary" className="bg-toga-green-soft text-toga-green-strong">
               Abono a {formatCode("debt", detail.debtCode)}
@@ -119,6 +126,14 @@ function PaymentDetailDialog({
 
         <dl className="divide-y rounded-2xl border text-sm">
           <Row label="Concepto">{payment.concept}</Row>
+          <Row label="Reparto">
+            <span className="block tabular-nums">
+              {METAL_LABEL}: {formatMoney(payment.amountMetal, payment.currency)}
+            </span>
+            <span className="block tabular-nums">
+              {LABOR_LABEL}: {formatMoney(payment.amountLabor, payment.currency)}
+            </span>
+          </Row>
           <Row label="Categoría">{detail.categoryName}</Row>
           <Row label="Método">{PAYMENT_METHOD_LABELS[payment.paymentMethod]}</Row>
           {payment.order && (

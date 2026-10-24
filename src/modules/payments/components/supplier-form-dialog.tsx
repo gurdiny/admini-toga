@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Field, FormError } from "@/components/form/field";
 import { DayInput } from "@/components/form/day-input";
-import { MoneyInput } from "@/components/form/money-input";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,19 +14,19 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAction } from "@/hooks/use-action";
 import { formatCode } from "@/lib/codes";
 import { getToday } from "@/lib/date";
 import { createSupplier, updateSupplier } from "../actions/suppliers";
-
-const NONE = "none";
+import { SplitAmountFields } from "./split-amount-fields";
+import { LABOR_LABEL, METAL_LABEL } from "../charges";
 
 export type SupplierFormValues = {
   id: string;
   name: string;
-  categoryId: string | null;
+  chargesMetal: boolean;
+  chargesLabor: boolean;
   contactName: string | null;
   phone: string | null;
   hasWhatsApp: boolean;
@@ -39,7 +38,6 @@ export type SupplierFormValues = {
 type Saved = { id: string; code: number; name: string };
 
 type Props = {
-  categories: { id: string; name: string }[];
   /** Con `supplier` edita; sin él, da de alta. */
   supplier?: SupplierFormValues;
   /** Nombre precargado al crear desde el buscador de proveedores. */
@@ -66,7 +64,6 @@ export function SupplierFormDialog({ trigger, open, onOpenChange, ...props }: Pr
 }
 
 function SupplierForm({
-  categories,
   supplier,
   initialName,
   onSaved,
@@ -75,7 +72,8 @@ function SupplierForm({
   const isEdit = Boolean(supplier);
   const [values, setValues] = useState(() => ({
     name: supplier?.name ?? initialName ?? "",
-    categoryId: supplier?.categoryId ?? NONE,
+    chargesMetal: supplier?.chargesMetal ?? true,
+    chargesLabor: supplier?.chargesLabor ?? true,
     contactName: supplier?.contactName ?? "",
     phone: supplier?.phone ?? "",
     hasWhatsApp: supplier?.hasWhatsApp ?? false,
@@ -83,7 +81,8 @@ function SupplierForm({
     address: supplier?.address ?? "",
     notes: supplier?.notes ?? "",
     owes: false,
-    obAmount: "",
+    obMetal: "",
+    obLabor: "",
     obDate: getToday() as string,
     obDescription: "",
   }));
@@ -108,7 +107,8 @@ function SupplierForm({
     event.preventDefault();
     const base = {
       name: values.name,
-      categoryId: values.categoryId === NONE ? null : values.categoryId,
+      chargesMetal: values.chargesMetal,
+      chargesLabor: values.chargesLabor,
       contactName: values.contactName,
       phone: values.phone,
       hasWhatsApp: values.hasWhatsApp,
@@ -120,7 +120,7 @@ function SupplierForm({
       update.run({ ...base, id: supplier.id });
     } else {
       const openingBalance = values.owes
-        ? { amount: values.obAmount, date: values.obDate, description: values.obDescription }
+        ? { amountMetal: values.obMetal, amountLabor: values.obLabor, date: values.obDate, description: values.obDescription }
         : null;
       create.run({ ...base, openingBalance });
     }
@@ -139,26 +139,28 @@ function SupplierForm({
             <Input id="s-name" value={values.name} onChange={(e) => set("name", e.target.value)} className="h-11" autoFocus aria-invalid={!!errors.name} />
           </Field>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Tipo de proveedor" htmlFor="s-category" error={errors.categoryId}>
-              <Select value={values.categoryId} onValueChange={(v) => set("categoryId", v)}>
-                <SelectTrigger id="s-category" className="h-11 w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE}>Sin tipo</SelectItem>
-                  {categories.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Persona de contacto" htmlFor="s-contact" error={errors.contactName}>
-              <Input id="s-contact" value={values.contactName} onChange={(e) => set("contactName", e.target.value)} className="h-11" />
-            </Field>
-          </div>
+          {/* Qué se le paga: puede ser una, la otra o las dos. Decide los
+              renglones de su nota. */}
+          <Field label="Qué le pagas" htmlFor="s-metal" hint="Puedes marcar las dos." error={errors.chargesMetal}>
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
+              <ChargeCheck
+                id="s-metal"
+                label={METAL_LABEL}
+                checked={values.chargesMetal}
+                onChange={(v) => set("chargesMetal", v)}
+              />
+              <ChargeCheck
+                id="s-labor"
+                label={LABOR_LABEL}
+                checked={values.chargesLabor}
+                onChange={(v) => set("chargesLabor", v)}
+              />
+            </div>
+          </Field>
+
+          <Field label="Persona de contacto" htmlFor="s-contact" error={errors.contactName}>
+            <Input id="s-contact" value={values.contactName} onChange={(e) => set("contactName", e.target.value)} className="h-11" />
+          </Field>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Teléfono" htmlFor="s-phone" error={errors.phone} hint="10 dígitos">
@@ -197,14 +199,17 @@ function SupplierForm({
                   <p className="text-muted-foreground text-sm">
                     Lo que le debes hoy a este proveedor. Se guarda como su saldo inicial y después le registras abonos.
                   </p>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="Monto que le debo" htmlFor="s-ob-amount" required error={errors["openingBalance.amount"]}>
-                      <MoneyInput id="s-ob-amount" value={values.obAmount} onValueChange={(v) => set("obAmount", v)} aria-invalid={!!errors["openingBalance.amount"]} />
-                    </Field>
-                    <Field label="Saldo al día" htmlFor="s-ob-date" required error={errors["openingBalance.date"]}>
-                      <DayInput id="s-ob-date" value={values.obDate} onChange={(v) => set("obDate", v)} />
-                    </Field>
-                  </div>
+                  <SplitAmountFields
+                    idPrefix="s-ob"
+                    legend="¿Cuánto le debes de cada cosa?"
+                    values={{ metal: values.obMetal, labor: values.obLabor }}
+                    currency="MXN"
+                    onChange={(key, value) => set(key === "metal" ? "obMetal" : "obLabor", value)}
+                    error={errors["openingBalance.amountMetal"] ?? errors["openingBalance.amountLabor"]}
+                  />
+                  <Field label="Saldo al día" htmlFor="s-ob-date" required error={errors["openingBalance.date"]}>
+                    <DayInput id="s-ob-date" value={values.obDate} onChange={(v) => set("obDate", v)} />
+                  </Field>
                   <Field label="Descripción" htmlFor="s-ob-desc" hint="Opcional. Por ejemplo: «Saldo de la nota 2231»." error={errors["openingBalance.description"]}>
                     <Input id="s-ob-desc" value={values.obDescription} onChange={(e) => set("obDescription", e.target.value)} className="h-11" />
                   </Field>
@@ -223,5 +228,31 @@ function SupplierForm({
           </Button>
         </DialogFooter>
     </>
+  );
+}
+
+/** Casilla de «qué le pagas»: se ve de 20 px y el área que se toca mide 44. */
+function ChargeCheck({
+  id,
+  label,
+  checked,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label htmlFor={id} className="-my-1 flex min-h-11 items-center gap-3 text-sm font-bold">
+      <input
+        id={id}
+        type="checkbox"
+        className="accent-toga-green-strong size-5"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      {label}
+    </label>
   );
 }

@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { requirePageRole } from "@/lib/auth/session";
 import { formatCode } from "@/lib/codes";
+import { chargesLabel } from "@/modules/payments/charges";
 import { cn } from "@/lib/utils";
 import { AdminTable, type AdminColumn } from "@/modules/admin/components/admin-table";
 import { CategoryRowActions, NewCategoryButton, SupplierActiveButton } from "@/modules/admin/components/catalog-actions";
@@ -46,7 +47,7 @@ const supplierColumns: AdminColumn<SupplierListItem>[] = [
       </span>
     ),
   },
-  { header: "Código", cell: (s) => [formatCode("supplier", s.code), s.categoryName].filter(Boolean).join(" · ") },
+  { header: "Código", cell: (s) => `${formatCode("supplier", s.code)} · ${chargesLabel(s)}` },
 ];
 
 export default async function CatalogsPage({ searchParams }: PageProps<"/admin/catalogos">) {

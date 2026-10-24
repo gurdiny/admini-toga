@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Merge, Pencil } from "lucide-react";
+import { Merge, Pencil, Trash2 } from "lucide-react";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EntityPicker, type PickerItem } from "@/components/form/entity-picker";
 import { Field, FormError } from "@/components/form/field";
 import { formatPhone } from "@/components/phone-link";
@@ -12,9 +13,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAction } from "@/hooks/use-action";
 import { formatCode } from "@/lib/codes";
+import { plural } from "@/lib/text";
 import { searchClients } from "@/modules/reminders/actions/reminders";
 import type { ClientOption } from "@/modules/reminders/queries";
-import { mergeClients, updateClient } from "../actions/clients";
+import { mergeClients, softDeleteClient, updateClient } from "../actions/clients";
 
 type Client = { id: string; code: number; name: string; phone: string | null; notes: string | null };
 
@@ -178,6 +180,48 @@ function MergeForm({ client, onDone }: { client: Client; onDone: () => void }) {
           {merge.pending ? "Fusionando…" : "Fusionar"}
         </Button>
       </DialogFooter>
+    </>
+  );
+}
+
+/**
+ * Borra al cliente y sus pedidos (a la papelera). Los pagos a proveedores de
+ * esos pedidos se conservan. Solo el dueño.
+ */
+export function DeleteClientButton({ client, orders }: { client: Client; orders: number }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const remove = useAction(softDeleteClient, {
+    success: `${client.name} se fue a la papelera.`,
+    onSuccess: () => {
+      setOpen(false);
+      router.push("/recordatorios");
+    },
+  });
+
+  return (
+    <>
+      <Button variant="ghost" className="text-destructive" onClick={() => setOpen(true)}>
+        <Trash2 aria-hidden /> Borrar
+      </Button>
+      <ConfirmDialog
+        open={open}
+        onOpenChange={setOpen}
+        title={`¿Borrar a ${client.name}?`}
+        description={
+          orders > 0 ? (
+            <>
+              Se borran también sus <strong>{plural(orders, "pedido", "pedidos")}</strong>. Los pagos a proveedores de
+              esos pedidos se quedan en el historial. Todo se puede restaurar desde la papelera.
+            </>
+          ) : (
+            <>Todavía no tiene pedidos. Se puede restaurar desde la papelera.</>
+          )
+        }
+        requireCheck={orders > 0 ? `Sí, bórralo con sus ${plural(orders, "pedido", "pedidos")}.` : null}
+        pending={remove.pending}
+        onConfirm={(confirmed) => remove.run({ id: client.id, confirm: confirmed })}
+      />
     </>
   );
 }

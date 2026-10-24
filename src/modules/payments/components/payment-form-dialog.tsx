@@ -5,7 +5,6 @@ import { Check, ClipboardList, X } from "lucide-react";
 import { EntityPicker } from "@/components/form/entity-picker";
 import { Field, FormError } from "@/components/form/field";
 import { DayInput } from "@/components/form/day-input";
-import { MoneyInput } from "@/components/form/money-input";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -21,14 +20,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAction } from "@/hooks/use-action";
 import { formatCode, parseCode } from "@/lib/codes";
 import { formatDay, getToday } from "@/lib/date";
-import { formatMoney, toDecimal } from "@/lib/money";
+import { formatMoney, toDecimal, ZERO, type Decimal } from "@/lib/money";
 import { toNameKey } from "@/lib/normalize";
 import { cn } from "@/lib/utils";
 import { CURRENCIES } from "@/lib/validation";
 import type { PaymentMethod } from "@/generated/prisma/browser";
 import { loadDebtsForPayment } from "../actions/debts";
 import { createPayment, updatePayment } from "../actions/payments";
+import { LABOR_LABEL, METAL_LABEL, type ChargeKey } from "../charges";
 import { PAYMENT_METHOD_LABELS } from "../labels";
+import { SplitAmountFields, type SplitValues } from "./split-amount-fields";
 import type { CaptureOptions, DebtSummary, PaymentOrderRef } from "../queries";
 import { SupplierFormDialog } from "./supplier-form-dialog";
 
@@ -40,7 +41,9 @@ export type PaymentFormValues = {
   supplierId: string;
   categoryId: string;
   concept: string;
-  amount: string;
+  /** El pago se captura por renglón; el total sale de sumarlos. */
+  amountMetal: string;
+  amountLabor: string;
   currency: string;
   exchangeRate: string | null;
   paymentMethod: PaymentMethod;
@@ -70,7 +73,8 @@ type Values = {
   debtId: string;
   categoryId: string;
   concept: string;
-  amount: string;
+  amountMetal: string;
+  amountLabor: string;
   currency: string;
   exchangeRate: string;
   paymentMethod: PaymentMethod;
@@ -105,7 +109,8 @@ function PaymentForm({
     debtId: payment ? (payment.debtId ?? CONTADO) : (preset?.debtId ?? ""),
     categoryId: payment?.categoryId ?? "",
     concept: payment?.concept ?? "",
-    amount: payment?.amount ?? "",
+    amountMetal: payment?.amountMetal ?? "",
+    amountLabor: payment?.amountLabor ?? "",
     currency: payment?.currency ?? options.defaults.currency,
     exchangeRate: payment?.exchangeRate ?? "",
     paymentMethod: payment?.paymentMethod ?? defaultMethod,
@@ -176,11 +181,18 @@ function PaymentForm({
   }
 
   const selectedDebt = debts?.find((d) => d.id === values.debtId) ?? null;
-  // Saldo disponible: al editar un abono, lo que ya abonó este mismo pago vuelve a estar disponible.
-  const available = selectedDebt
-    ? toDecimal(selectedDebt.balance).add(payment?.debtId === selectedDebt.id ? toDecimal(payment.amount) : 0)
+  // Saldo disponible de cada renglón: al editar un abono, lo que ya abonó
+  // este mismo pago vuelve a estar disponible en su lado.
+  const editingThisDebt = payment?.debtId === selectedDebt?.id ? payment : null;
+  const available: Record<ChargeKey, Decimal> | null = selectedDebt
+    ? {
+        metal: toDecimal(selectedDebt.balance.metal).add(editingThisDebt ? toDecimal(editingThisDebt.amountMetal) : ZERO),
+        labor: toDecimal(selectedDebt.balance.labor).add(editingThisDebt ? toDecimal(editingThisDebt.amountLabor) : ZERO),
+      }
     : null;
-  const remaining = available && values.amount ? available.sub(toDecimal(values.amount || "0")) : null;
+  const split: SplitValues = { metal: values.amountMetal, labor: values.amountLabor };
+  const setRow = (key: ChargeKey, value: string) =>
+    set(key === "metal" ? "amountMetal" : "amountLabor", value);
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -189,7 +201,8 @@ function PaymentForm({
       supplierId: values.supplierId,
       categoryId: values.categoryId,
       concept: values.concept,
-      amount: values.amount,
+      amountMetal: values.amountMetal,
+      amountLabor: values.amountLabor,
       currency: values.currency as (typeof CURRENCIES)[number],
       exchangeRate: values.currency === "MXN" ? null : values.exchangeRate,
       paymentMethod: values.paymentMethod,
@@ -228,7 +241,6 @@ function PaymentForm({
               suppliers={suppliers}
               value={values.supplierId}
               disabled={isEdit && !!payment?.debtId}
-              categories={options.supplierCategories}
               onChange={chooseSupplier}
               onCreated={(s) => {
                 setSuppliers((list) => [...list, s].sort((a, b) => a.name.localeCompare(b.name, "es")));
@@ -250,7 +262,17 @@ function PaymentForm({
                       checked={values.debtId === debt.id}
                       onSelect={() => chooseDebt(debt.id)}
                       title={`Abono a ${formatCode("debt", debt.code)} · ${debt.description}`}
-                      detail={`Saldo ${formatMoney(debt.balance, debt.currency)} de ${formatMoney(debt.amount, debt.currency)} · ${formatDay(debt.date)}`}
+                      detail={
+                        <>
+                          <span className="block tabular-nums">
+                            Falta: {METAL_LABEL} {formatMoney(debt.balance.metal, debt.currency)} · {LABOR_LABEL}{" "}
+                            {formatMoney(debt.balance.labor, debt.currency)}
+                          </span>
+                          <span className="block">
+                            {formatDay(debt.date)} · de {formatMoney(debt.amount, debt.currency)}
+                          </span>
+                        </>
+                      }
                     />
                   ))}
                   <DebtOption
@@ -265,47 +287,35 @@ function PaymentForm({
             </fieldset>
           )}
 
-          <div className="space-y-2">
-            <Field label="Monto" htmlFor="p-amount" required error={errors.amount}>
-              <MoneyInput id="p-amount" value={values.amount} currency={values.currency} onValueChange={(v) => set("amount", v)} aria-invalid={!!errors.amount} />
-            </Field>
-            {showCurrency || values.currency !== "MXN" ? (
-              <Field label="Moneda" htmlFor="p-currency" error={errors.currency}>
-                <Select value={values.currency} onValueChange={(v) => set("currency", v)} disabled={!!selectedDebt}>
-                  <SelectTrigger id="p-currency" className="h-11 w-full sm:w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CURRENCIES.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {c}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-            ) : (
-              <button type="button" className="text-muted-foreground inline-flex min-h-10 items-center text-sm underline underline-offset-4" onClick={() => setShowCurrency(true)}>
-                ¿En dólares?
-              </button>
-            )}
-          </div>
+          <SplitAmountFields
+            idPrefix="p"
+            legend={selectedDebt ? "¿Cómo se reparte el abono?" : "¿Cómo se reparte el pago?"}
+            values={split}
+            currency={values.currency}
+            onChange={setRow}
+            available={available}
+            error={errors.amountMetal ?? errors.amountLabor ?? errors.amount}
+          />
 
-          {selectedDebt && available && (
-            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-              <span className={cn(remaining?.lt(0) ? "text-destructive font-bold" : "text-muted-foreground")}>
-                {remaining === null
-                  ? `Saldo pendiente: ${formatMoney(available, selectedDebt.currency)}`
-                  : remaining.lt(0)
-                    ? `Excede el saldo por ${formatMoney(remaining.neg(), selectedDebt.currency)}`
-                    : remaining.isZero()
-                      ? "Con este abono queda liquidado."
-                      : `Después de este abono quedará: ${formatMoney(remaining, selectedDebt.currency)}`}
-              </span>
-              <Button type="button" size="sm" variant="outline" onClick={() => set("amount", available.toFixed(2))}>
-                Liquidar ({formatMoney(available, selectedDebt.currency)})
-              </Button>
-            </div>
+          {showCurrency || values.currency !== "MXN" ? (
+            <Field label="Moneda" htmlFor="p-currency" error={errors.currency}>
+              <Select value={values.currency} onValueChange={(v) => set("currency", v)} disabled={!!selectedDebt}>
+                <SelectTrigger id="p-currency" className="h-11 w-full sm:w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CURRENCIES.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          ) : (
+            <button type="button" className="text-muted-foreground inline-flex min-h-10 items-center text-sm underline underline-offset-4" onClick={() => setShowCurrency(true)}>
+              ¿En dólares?
+            </button>
           )}
 
           {values.currency !== "MXN" && (
@@ -367,7 +377,7 @@ function PaymentForm({
   );
 }
 
-function DebtOption({ checked, onSelect, title, detail }: { checked: boolean; onSelect: () => void; title: string; detail: string }) {
+function DebtOption({ checked, onSelect, title, detail }: { checked: boolean; onSelect: () => void; title: string; detail: React.ReactNode }) {
   return (
     <button
       type="button"
@@ -388,9 +398,9 @@ function DebtOption({ checked, onSelect, title, detail }: { checked: boolean; on
       >
         {checked && <Check className="size-3.5" />}
       </span>
-      <span className="space-y-0.5">
+      <span className="min-w-0 space-y-0.5">
         <span className="block text-sm font-bold">{title}</span>
-        <span className="text-muted-foreground block text-sm">{detail}</span>
+        <span className="text-muted-foreground block text-xs">{detail}</span>
       </span>
     </button>
   );
@@ -403,14 +413,12 @@ function SupplierPicker({
   suppliers,
   value,
   disabled,
-  categories,
   onChange,
   onCreated,
 }: {
   suppliers: PickerSupplier[];
   value: string;
   disabled?: boolean;
-  categories: { id: string; name: string }[];
   onChange: (id: string) => void;
   onCreated: (supplier: PickerSupplier) => void;
 }) {
@@ -443,7 +451,6 @@ function SupplierPicker({
       <SupplierFormDialog
         open={creating}
         onOpenChange={setCreating}
-        categories={categories}
         initialName={search.trim()}
         onSaved={(s) => {
           setSearch("");

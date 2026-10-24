@@ -60,6 +60,7 @@ export async function globalSearch(query: string, modules: Record<ModuleKey, boo
     modules.payments
       ? db.supplier.findMany({
           where: {
+            deletedAt: null,
             OR: [
               { nameKey: { contains: key } },
               { contactName: { contains: q, mode: "insensitive" } },

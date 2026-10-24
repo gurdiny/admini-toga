@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { CategoryType, PaymentMethod, Role } from "@/generated/prisma/browser";
-import { CURRENCIES, zId, zText } from "@/lib/validation";
+import { CURRENCIES, zCheckbox, zId, zText } from "@/lib/validation";
 import { clientSchema } from "@/modules/reminders/schemas";
 
 /** Colores para elegir en categorías (paleta de TOGA). */
@@ -53,6 +53,9 @@ export type CreateUserInput = z.input<typeof createUserSchema>;
 
 export const updateClientSchema = clientSchema.extend({ id: zId("El cliente") });
 
+/** Borrar un cliente; `confirm` es la casilla que se exige si tiene pedidos. */
+export const deleteClientSchema = z.object({ id: zId("El cliente"), confirm: zCheckbox });
+
 export const mergeClientsSchema = z
   .object({ keepId: zId("El cliente que se queda"), mergeId: zId("El cliente duplicado") })
   .refine((data) => data.keepId !== data.mergeId, { path: ["mergeId"], message: "Elige otro cliente: no se puede fusionar consigo mismo." });
@@ -78,6 +81,6 @@ export const settingsSchema = z.object({
 export type SettingsInput = z.input<typeof settingsSchema>;
 
 export const restoreSchema = z.object({
-  type: z.enum(["pagos", "adeudos", "recordatorios"]),
+  type: z.enum(["pagos", "adeudos", "recordatorios", "proveedores", "clientes"]),
   id: zId(),
 });

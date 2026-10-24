@@ -5,7 +5,8 @@ import { recordAudit, withAudit } from "@/lib/audit";
 import { formatCode } from "@/lib/codes";
 import { BusinessError } from "@/lib/errors";
 import { toNameKey } from "@/lib/normalize";
-import { mergeClientsSchema, updateClientSchema } from "../schemas";
+import { plural } from "@/lib/text";
+import { deleteClientSchema, mergeClientsSchema, updateClientSchema } from "../schemas";
 
 const REVALIDATE = ["/admin/clientes", "/clientes", "/recordatorios"];
 
@@ -67,5 +68,37 @@ export const mergeClients = defineAction(
       },
     );
     return { movedOrders: result.movedOrders };
+  },
+);
+
+/**
+ * Borra un cliente y sus pedidos (a la papelera, como todo). Los pagos a
+ * proveedores que estaban ligados a esos pedidos se conservan: solo dejan de
+ * mostrar el pedido. Con la casilla marcada si el cliente tiene pedidos.
+ */
+export const softDeleteClient = defineAction(
+  { role: "OWNER", schema: deleteClientSchema, revalidate: REVALIDATE },
+  async ({ id, confirm }, { user }) => {
+    await withAudit(
+      { userId: user.id, action: "DELETE", entity: "Client", before: (tx) => tx.client.findUnique({ where: { id } }) },
+      async (tx) => {
+        const client = await tx.client.findFirst({ where: { id, deletedAt: null } });
+        if (!client) throw new BusinessError("El cliente ya no existe. Recarga la página.");
+
+        const orders = await tx.orderReminder.findMany({ where: { clientId: id, deletedAt: null } });
+        if (orders.length && !confirm) {
+          throw new BusinessError(
+            `${client.name} tiene ${plural(orders.length, "pedido", "pedidos")}. Marca la casilla para borrarlo junto con ellos.`,
+          );
+        }
+
+        const now = new Date();
+        for (const order of orders) {
+          const after = await tx.orderReminder.update({ where: { id: order.id }, data: { deletedAt: now } });
+          await recordAudit(tx, { userId: user.id, action: "DELETE", entity: "OrderReminder", before: order, after });
+        }
+        return tx.client.update({ where: { id }, data: { deletedAt: now } });
+      },
+    );
   },
 );

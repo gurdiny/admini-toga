@@ -3,8 +3,7 @@
 // - ningún diálogo se desborda a lo ancho,
 // - en celular, lo que se toca mide al menos 40 px de alto.
 // Deja capturas en e2e/screenshots/layout-<ancho>-<pantalla>.png
-const { chromium } = require("playwright-core");
-const { CHROME, B, shots, log } = require("./config.cjs");
+const { launchBrowser, B, shots, log } = require("./config.cjs");
 
 const WIDTHS = [360, 375, 390, 600, 768, 1280];
 /** Día de hoy en México (yyyy-MM-dd). */
@@ -40,10 +39,32 @@ const DIALOGS = [
       await d.getByLabel("Proveedor").fill("Platería");
       await d.getByRole("button", { name: /^Platería/ }).first().click();
       await d.getByText(/Abono a ADE-/).first().waitFor();
-      await d.getByLabel("Monto").fill("100");
+      // Los dos renglones de la nota, con su saldo y su botón «Liquidar».
+      // exact: el botón «Liquidar» lleva el renglón en su aria-label.
+      await d.getByLabel("Metal", { exact: true }).fill("100");
+      await d.getByLabel("Mano de obra", { exact: true }).fill("50");
     },
   ],
   ["nuevo-proveedor", "/proveedores", (p) => p.getByRole("button", { name: "Nuevo proveedor" }).locator("visible=true").first().click()],
+  // Alta de proveedor con «Ya le debo»: el saldo inicial también va por renglón.
+  ["nuevo-proveedor-con-saldo", "/proveedores", async (p) => {
+    await p.getByRole("button", { name: "Nuevo proveedor" }).locator("visible=true").first().click();
+    const d = p.getByRole("dialog", { name: "Nuevo proveedor" });
+    await d.getByLabel("Ya le debo").check();
+    // Por id: «Metal» también es la casilla de «Qué le pagas» de arriba.
+    await d.locator("#s-ob-metal").waitFor();
+    await d.locator("#s-ob-metal").fill("8000");
+    await d.locator("#s-ob-labor").fill("2000");
+  }],
+  // La nota nueva: dos montos, uno por renglón.
+  ["nuevo-adeudo", "PROVEEDOR", (p) => p.getByRole("button", { name: "Nuevo adeudo" }).locator("visible=true").first().click()],
+  // Borrar una nota con abonos: pide marcar la casilla.
+  ["borrar-nota", "PROVEEDOR", async (p) => {
+    await p.getByRole("button", { name: /^Opciones de ADE-/ }).locator("visible=true").first().click();
+    await p.getByRole("menuitem", { name: "Borrar" }).click();
+  }, { role: "alertdialog" }],
+  // Borrar al proveedor con todo lo suyo: también pide la casilla.
+  ["borrar-proveedor", "PROVEEDOR", (p) => p.getByRole("button", { name: "Borrar proveedor" }).locator("visible=true").first().click(), { role: "alertdialog" }],
   // Rango amplio: «Esta semana» puede estar vacía (p. ej. un lunes) y no habría pago que abrir.
   ["detalle-pago", `/pagos?rango=personalizado&desde=2020-01-01&hasta=${TODAY}`, async (p) => {
     await p.getByRole("button", { name: /Opciones de PAG-/ }).locator("visible=true").first().click();
@@ -128,7 +149,7 @@ function audit(mobile) {
 }
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: CHROME, headless: true });
+  const browser = await launchBrowser();
   let page;
   try {
     for (const width of WIDTHS) {
@@ -142,7 +163,11 @@ function audit(mobile) {
 
       // Ficha del primer proveedor (la pantalla con más contenido) y del cliente con más pedidos.
       await page.goto(`${B}/proveedores`);
-      const supplierHref = await page.locator('main a[href^="/proveedores/"]').first().getAttribute("href");
+      // Mejor uno que deba algo: su ficha trae notas partidas en dos y es la
+      // pantalla más apretada. Si ninguno debe, el primero de la lista.
+      const owing = page.locator('main li:has-text("$") a[href^="/proveedores/"]');
+      const anySupplier = page.locator('main a[href^="/proveedores/"]');
+      const supplierHref = await ((await owing.count()) ? owing : anySupplier).first().getAttribute("href");
       await page.goto(`${B}/admin/clientes`);
       const clientHref = await page.locator('main a[href^="/clientes/"]').first().getAttribute("href");
       const pages = [
@@ -161,12 +186,13 @@ function audit(mobile) {
         await page.screenshot({ path: shots(`layout-${width}-${label}.png`), fullPage: true });
       }
       await page.goto(`${B}/api/dev/login?as=dueno@joyeria.local&next=/`);
-      for (const [label, path, open, { mobileOnly } = {}] of DIALOGS) {
+      for (const [label, path, open, { mobileOnly, role = "dialog" } = {}] of DIALOGS) {
         if (mobileOnly && !mobile) continue;
-        await page.goto(`${B}${path === "CLIENTE" ? clientHref : path}`);
+        const href = path === "CLIENTE" ? clientHref : path === "PROVEEDOR" ? supplierHref : path;
+        await page.goto(`${B}${href}`);
         await page.waitForLoadState("networkidle");
         await open(page);
-        await page.getByRole("dialog").last().waitFor();
+        await page.getByRole(role).last().waitFor();
         await page.waitForTimeout(300); // animación de entrada
         const problems = await page.evaluate(audit, mobile);
         log(problems.length === 0, `${width}px diálogo ${label}${problems.length ? ": " + problems.join("; ") : ""}`);

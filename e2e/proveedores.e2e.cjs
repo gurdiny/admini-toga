@@ -1,5 +1,4 @@
-const { chromium } = require("playwright-core");
-const { CHROME, B, shots, log, sql } = require("./config.cjs");
+const { launchBrowser, B, shots, log, sql } = require("./config.cjs");
 const balance = async (page) => (await page.locator("#saldo + span").innerText()).trim();
 
 /** Cuántos pagos se pueden editar/borrar: todos tienen menú (Ver detalle), no todos tienen «Borrar». */
@@ -17,7 +16,7 @@ async function editablePayments(page) {
 }
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: CHROME, headless: true });
+  const browser = await launchBrowser();
   const page = await browser.newPage({ viewport: { width: 420, height: 900 }, locale: "es-MX" });
   page.setDefaultTimeout(15000);
   try {
@@ -30,7 +29,9 @@ async function editablePayments(page) {
     await page.getByLabel("Teléfono").fill("(55) 9876-5432");
     await page.getByText("Tiene WhatsApp").click();
     await page.getByText("Ya le debo").click();
-    await page.getByLabel("Monto que le debo").fill("50000");
+    // El saldo inicial también va por renglón: aquí todo es metal.
+    // Por id porque «Metal» también es la casilla de «Qué le pagas».
+    await page.locator("#s-ob-metal").fill("50000");
     await page.screenshot({ path: shots("e2e-1-alta.png"), fullPage: true });
     await page.getByRole("button", { name: "Dar de alta" }).click();
     await page.waitForURL(/\/proveedores\/[^/]+$/);
@@ -41,14 +42,15 @@ async function editablePayments(page) {
     const abonar = async (amount, { liquidar = false } = {}) => {
       await page.getByRole("button", { name: "Abonar" }).first().click();
       const dialog = page.getByRole("dialog");
-      if (liquidar) await dialog.getByRole("button", { name: /Liquidar/ }).click();
-      else await dialog.getByLabel("Monto").fill(amount);
+      // La nota va partida en dos: esta es toda de metal.
+      if (liquidar) await dialog.getByRole("button", { name: "Liquidar metal" }).click();
+      else await dialog.getByLabel("Metal", { exact: true }).fill(amount);
       await dialog.getByRole("combobox", { name: "Categoría" }).click();
       await page.getByRole("option", { name: "Pulseras" }).click();
       return dialog;
     };
     let dialog = await abonar("20000");
-    log(await dialog.getByText("Después de este abono quedará: $30,000.00").isVisible(), "Vista previa: quedará $30,000.00");
+    log(await dialog.getByText("Total", { exact: true }).isVisible(), "El diálogo suma los dos renglones en «Total»");
     await dialog.getByRole("button", { name: "Registrar pago" }).click();
     await dialog.waitFor({ state: "hidden" });
     await page.getByText("$30,000.00").first().waitFor();
@@ -56,9 +58,9 @@ async function editablePayments(page) {
 
     // ── Abono mayor al saldo ──
     dialog = await abonar("40000");
-    log(await dialog.getByText("Excede el saldo por $10,000.00").isVisible(), "Aviso en el formulario: excede por $10,000.00");
+    log(await dialog.getByText("Pasa del saldo por $10,000.00").isVisible(), "Aviso en el renglón: pasa del saldo por $10,000.00");
     await dialog.getByRole("button", { name: "Registrar pago" }).click();
-    const toast = page.getByRole("dialog").getByText(/El abono es mayor que el saldo de ADE-\d+: quedan \$30,000\.00/);
+    const toast = page.getByRole("dialog").getByText(/El abono de metal es mayor que su saldo en ADE-\d+: quedan \$30,000\.00/);
     await toast.waitFor();
     log(true, `Servidor lo rechaza: «${(await toast.innerText()).trim()}»`);
     await page.screenshot({ path: shots("e2e-2-excede.png"), fullPage: true });
@@ -66,7 +68,7 @@ async function editablePayments(page) {
 
     // ── Liquidar ──
     dialog = await abonar(null, { liquidar: true });
-    log(await dialog.getByText("Con este abono queda liquidado.").isVisible(), "Botón Liquidar llena $30,000.00");
+    log((await dialog.getByLabel("Metal", { exact: true }).inputValue()) === "30,000.00", "«Liquidar metal» llena $30,000.00");
     await dialog.getByRole("button", { name: "Registrar pago" }).click();
     await dialog.waitFor({ state: "hidden" });
     await page.getByText("Al corriente").first().waitFor();
@@ -76,7 +78,9 @@ async function editablePayments(page) {
     await page.getByRole("button", { name: "Nuevo adeudo" }).click();
     dialog = page.getByRole("dialog");
     await dialog.getByLabel("Descripción").fill("Lote de 30 dijes");
-    await dialog.getByLabel("Monto total").fill("3000");
+    // Nota con los dos renglones: plata y hechura.
+    await dialog.getByLabel("Metal", { exact: true }).fill("2500");
+    await dialog.getByLabel("Mano de obra", { exact: true }).fill("500");
     await dialog.getByRole("button", { name: "Registrar adeudo" }).click();
     await dialog.waitFor({ state: "hidden" });
     await page.getByText("$3,000.00").first().waitFor();

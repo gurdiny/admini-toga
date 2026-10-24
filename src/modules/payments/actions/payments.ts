@@ -7,9 +7,9 @@ import { canDelete, canEdit, DELETE_DENIED_MESSAGE, EDIT_DENIED_MESSAGE } from "
 import { formatCode } from "@/lib/codes";
 import { BusinessError } from "@/lib/errors";
 import { formatMoney, toDecimal, ZERO } from "@/lib/money";
-import { zId } from "@/lib/validation";
 import type { Prisma } from "@/generated/prisma/client";
-import { idSchema, paymentSchema } from "../schemas";
+import { CHARGE_LABELS } from "../charges";
+import { idSchema, paymentSchema, updatePaymentSchema } from "../schemas";
 
 const REVALIDATE = ["/pagos", "/proveedores", "/clientes"];
 
@@ -44,16 +44,29 @@ async function validatePayment(tx: Prisma.TransactionClient, data: PaymentData, 
     throw new BusinessError(`El adeudo ${ref} está en ${debt.currency}; el abono debe ser en la misma moneda.`);
   }
 
+  // Cada renglón se compara por su cuenta: el metal no paga hechura ni al revés.
   const paid = await tx.supplierPayment.aggregate({
     where: { debtId: debt.id, deletedAt: null, ...(editingId && { id: { not: editingId } }) },
-    _sum: { amount: true },
+    _sum: { amountMetal: true, amountLabor: true },
   });
-  const balance = debt.amount.sub(paid._sum.amount ?? ZERO);
-  if (toDecimal(data.amount).gt(balance)) {
+  const rows = [
+    {
+      label: CHARGE_LABELS.metal.toLowerCase(),
+      owed: debt.amountMetal.sub(paid._sum.amountMetal ?? ZERO),
+      paying: toDecimal(data.amountMetal),
+    },
+    {
+      label: CHARGE_LABELS.labor.toLowerCase(),
+      owed: debt.amountLabor.sub(paid._sum.amountLabor ?? ZERO),
+      paying: toDecimal(data.amountLabor),
+    },
+  ];
+  for (const row of rows) {
+    if (row.paying.lte(0) || row.paying.lte(row.owed)) continue;
     throw new BusinessError(
-      balance.lte(0)
-        ? `El adeudo ${ref} ya está liquidado.`
-        : `El abono es mayor que el saldo de ${ref}: quedan ${formatMoney(balance, debt.currency)}.`,
+      row.owed.lte(0)
+        ? `El renglón de ${row.label} de ${ref} ya está liquidado.`
+        : `El abono de ${row.label} es mayor que su saldo en ${ref}: quedan ${formatMoney(row.owed, debt.currency)}.`,
     );
   }
 }
@@ -74,7 +87,7 @@ export const createPayment = defineAction(
 );
 
 export const updatePayment = defineAction(
-  { role: "STAFF", schema: z.intersection(paymentSchema, z.object({ id: zId("El pago") })), revalidate: REVALIDATE },
+  { role: "STAFF", schema: updatePaymentSchema, revalidate: REVALIDATE },
   async ({ id, ...data }, { user }) => {
     await withAudit(
       { userId: user.id, action: "UPDATE", entity: "SupplierPayment", before: (tx) => tx.supplierPayment.findUnique({ where: { id } }) },
