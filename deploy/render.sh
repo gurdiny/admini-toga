@@ -36,18 +36,18 @@ if ((${#problems[@]})); then
   exit 1
 fi
 
-# El compose usa pull_policy: never: si la imagen no está en el servidor, el
-# Deploy fallaría. Mejor avisar aquí.
-if command -v docker >/dev/null && ! docker image inspect "$IMAGE:$TOGA_IMAGE_TAG" >/dev/null 2>&1; then
-  echo "✗ La imagen $IMAGE:$TOGA_IMAGE_TAG no está en este servidor. Primero:" >&2
-  echo "    docker pull $IMAGE:$TOGA_IMAGE_TAG" >&2
+# El compose usa pull_policy: never y el tag local :produccion (lo pone
+# auto-deploy.sh): si no existe, el Deploy de Easypanel fallaría.
+if command -v docker >/dev/null && ! docker image inspect "$IMAGE:produccion" >/dev/null 2>&1; then
+  echo "✗ No existe $IMAGE:produccion en este servidor. Primero:" >&2
+  echo "    bash $(dirname "$(readlink -f "$0")")/auto-deploy.sh $TOGA_IMAGE_TAG" >&2
   exit 1
 fi
 
-export APP_DOMAIN POSTGRES_PASSWORD BETTER_AUTH_SECRET TOGA_IMAGE_TAG
+export APP_DOMAIN POSTGRES_PASSWORD BETTER_AUTH_SECRET
 umask 077
 # Solo estas variables: cualquier otro $ del archivo se queda igual.
-envsubst '${APP_DOMAIN} ${POSTGRES_PASSWORD} ${BETTER_AUTH_SECRET} ${TOGA_IMAGE_TAG}' <"$TEMPLATE" >"$OUT"
+envsubst '${APP_DOMAIN} ${POSTGRES_PASSWORD} ${BETTER_AUTH_SECRET}' <"$TEMPLATE" >"$OUT"
 
 if grep -q '\${' "$OUT"; then
   echo "✗ Quedaron variables sin llenar en $OUT:" >&2

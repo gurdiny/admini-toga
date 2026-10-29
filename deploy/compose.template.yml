@@ -11,11 +11,12 @@
 # - Rutas absolutas: Easypanel ejecuta el compose desde otro directorio.
 services:
   toga-app:
-    image: ghcr.io/gurdiny/admini-toga:${TOGA_IMAGE_TAG}
-    # Siempre el tag del commit (sha-abc1234), nunca latest: el compose dice
-    # qué versión corre. La imagen es privada: la descarga root en el VPS con
-    # su token de solo lectura (docker pull). Easypanel nunca la baja por su
-    # cuenta, solo usa la que ya está en el servidor.
+    # :produccion es un tag local del VPS (nunca se publica): auto-deploy.sh lo
+    # apunta a la imagen sha-abc1234 del commit desplegado y recrea el
+    # contenedor. Qué commit corre: TOGA_IMAGE_TAG en .env.production y
+    # /opt/toga-app/deploys.log. La imagen es privada: la descarga root con su
+    # token de solo lectura; Easypanel nunca la baja por su cuenta.
+    image: ghcr.io/gurdiny/admini-toga:produccion
     pull_policy: never
     container_name: toga-app
     restart: unless-stopped

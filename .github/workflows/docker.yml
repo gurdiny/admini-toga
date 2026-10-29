@@ -4,8 +4,11 @@
 #   ghcr.io/gurdiny/admini-toga:sha-abc1234 cada commit: es el que usa producción
 #   ghcr.io/gurdiny/admini-toga:latest      último commit de main (referencia; producción no lo usa)
 #
-# Publicar la imagen NO actualiza producción: se cambia TOGA_IMAGE_TAG a mano
-# y se despliega en Easypanel (ver docs/DEPLOY.md).
+# Con la imagen publicada, el job «deploy» entra al VPS con una llave que solo
+# puede correr deploy/auto-deploy.sh (respaldo → nueva versión → healthy, o
+# regresa a la anterior). Ver docs/DEPLOY.md, «3. Actualizar».
+# Si un push nuevo cancela esta ejecución a medio deploy, el VPS lo termina
+# igual y el deploy siguiente espera su turno.
 name: Imagen Docker
 
 on:
@@ -65,3 +68,28 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy:
+    name: Desplegar en producción
+    needs: image
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: produccion
+      url: https://admin.toga.mx
+    steps:
+      - name: Desplegar en el VPS
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # La llave solo puede correr auto-deploy.sh; lo único que se manda es el tag.
+          ssh -i ~/.ssh/deploy -o IdentitiesOnly=yes -o BatchMode=yes -o ServerAliveInterval=30 \
+            "root@$HOST" "sha-${GITHUB_SHA::7}"
+      - name: Verificar que responde
+        run: curl -fsS --retry 6 --retry-delay 10 --retry-all-errors https://admin.toga.mx/api/health

@@ -72,19 +72,16 @@ cron `/root/backup-diario.sh` de las 3:30 y el firewall (solo 22/80/443 abiertos
    Docker guarda el token en `config.json` sin cifrar (por eso el aviso «stored unencrypted» y el
    permiso 600: solo root lo lee). Con `read:packages` lo único que permite es descargar imágenes.
 
-### Versiones: siempre `sha-xxxxxxx`, nunca `latest`
+### Versiones: el commit `sha-xxxxxxx`, nunca `latest`
 
 Cada commit de `main` publica la imagen con el tag **`sha-` + los 7 primeros caracteres del commit**
-(p. ej. `sha-d31f5f0`). El compose usa ese tag, así que **el archivo dice exactamente qué versión
-corre**, y desplegar es siempre un cambio consciente de `TOGA_IMAGE_TAG` en `.env.production`.
-(Actions también publica `latest`, pero producción nunca lo usa.)
+(p. ej. `sha-d31f5f0`). El compose de Easypanel usa el tag **local** `:produccion` (nunca se publica):
+`deploy/auto-deploy.sh` lo apunta a la imagen `sha-…` que toca y recrea `toga-app`. Qué commit corre:
+`TOGA_IMAGE_TAG` en `.env.production` (lo actualiza el script) y el historial en
+`/opt/toga-app/deploys.log`. (Actions también publica `latest`, pero producción nunca lo usa.)
 
-Cómo saber el tag de un commit: en tu computadora `git rev-parse --short=7 HEAD`, o en GitHub →
-Actions → la ejecución en verde de ese commit → el `sha` que aparece junto al mensaje.
-
-El compose lleva `pull_policy: never`: **Easypanel nunca descarga la imagen**, solo usa la que bajó root
-con `docker pull`. Si olvidas el pull no pasa en silencio: `render.sh` se niega a generar el compose y
-te dice qué `docker pull` falta.
+El compose lleva `pull_policy: never`: **Easypanel nunca descarga la imagen**, solo usa la que bajó root.
+Si no existe `:produccion`, `render.sh` se niega a generar el compose y dice qué correr.
 
 ### 1.2 DNS en Cloudflare
 
@@ -107,6 +104,7 @@ nano .env.production        # pega los dos valores, revisa APP_DOMAIN=admin.toga
                             # y pon TOGA_IMAGE_TAG=sha-xxxxxxx (el commit a desplegar)
 
 docker pull ghcr.io/gurdiny/admini-toga:sha-xxxxxxx   # el mismo tag (prueba también el token)
+docker tag ghcr.io/gurdiny/admini-toga:sha-xxxxxxx ghcr.io/gurdiny/admini-toga:produccion
 bash repo/deploy/render.sh  # valida y muestra el compose listo para copiar
 ```
 
@@ -219,37 +217,49 @@ npm run backup                                  # → backups/joyeria_AAAA-MM-DD
 npm run backup:test -- backups/joyeria_….dump   # restaura en una base temporal y compara
 ```
 
-## 3. Actualizar (cada despliegue cambia el tag a conciencia)
+## 3. Actualizar (automático al hacer push a `main`)
 
-1. Push a `main` y espera el ✓ verde en GitHub Actions (si las pruebas fallan, no se publica imagen).
-   Anota el tag: `sha-` + los 7 primeros caracteres de ese commit.
-2. **Respaldo antes de cambiar** (sobre todo si la versión trae migración):
-   `/opt/toga-app/repo/deploy/backup.sh`
-3. En el VPS, como root:
+Push a `main` → Actions corre lint, tipos y pruebas → publica `sha-xxxxxxx` → el job **«Desplegar en
+producción»** entra al VPS y corre `deploy/auto-deploy.sh sha-xxxxxxx`, que:
 
-   ```bash
-   cd /opt/toga-app
-   docker pull ghcr.io/gurdiny/admini-toga:sha-NUEVO
-   nano .env.production                 # TOGA_IMAGE_TAG=sha-NUEVO  (anota cuál había, por si regresas)
-   git -C repo pull                     # por si cambió la plantilla o los scripts
-   bash repo/deploy/render.sh           # falla si el tag no es sha-xxxxxxx o la imagen no está bajada
-   ```
+1. actualiza `/opt/toga-app/repo` (`git pull`) y se vuelve a ejecutar con la versión nueva del script;
+2. baja la imagen; si ya es la que corre, termina sin hacer nada;
+3. saca un **respaldo local** de la base (la copia a Drive la hace el cron de las 4:15); sin respaldo no
+   despliega;
+4. apunta `:produccion` a la imagen nueva y recrea solo `toga-app` (la base no se toca); las migraciones
+   se aplican al arrancar;
+5. espera a que quede **healthy** (hasta 4 min). Si no, **regresa sola a la versión anterior** y el job
+   sale en rojo. Las migraciones no se deshacen: si la versión fallida traía una, restaurar el respaldo
+   del paso 3 (`restore.sh --replace`).
 
-4. En Easypanel: pega el compose nuevo (solo cambia la línea `image:`) y **Deploy**. Las migraciones
-   nuevas se aplican solas al arrancar.
-5. Verifica que corre la versión que querías:
+Todo queda en el log del job de GitHub y en `/opt/toga-app/deploys.log`. Un deploy a la vez (`flock`):
+si un push nuevo cancela la ejecución a medio deploy, el VPS lo termina igual y el siguiente espera.
 
-   ```bash
-   docker inspect -f '{{.Config.Image}}' toga-app     # → ghcr.io/gurdiny/admini-toga:sha-NUEVO
-   curl -s https://admin.toga.mx/api/health
-   docker logs --tail 30 toga-app
-   ```
+**La llave de GitHub** (secret `DEPLOY_SSH_KEY`, sin contraseña) está en `/root/.ssh/authorized_keys`
+con `command="/opt/toga-app/repo/deploy/auto-deploy.sh",restrict`: solo puede correr ese script, sin
+terminal ni túneles. Otros secrets del repo: `DEPLOY_HOST` (IP del VPS) y `DEPLOY_KNOWN_HOSTS`
+(`ssh-keyscan -t ed25519 <IP>`, para no conectarse a un servidor impostor). Para revocarla, borrar esa
+línea de `authorized_keys`.
+
+Verificar a mano:
+
+```bash
+tail -20 /opt/toga-app/deploys.log
+docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' toga-app   # commit completo
+curl -s https://admin.toga.mx/api/health
+```
 
 ### Regresar a una versión anterior
 
-Es el mismo flujo con el tag anterior (el que anotaste en el paso 3): `docker pull` de ese tag,
-`TOGA_IMAGE_TAG=sha-ANTERIOR`, `render.sh`, pegar y Deploy. Ojo: las migraciones no se deshacen solas; si
-la versión nueva cambió la base, restaura también el respaldo del paso 2 (`restore.sh --replace`).
+En GitHub → Actions → la ejecución en verde de ese commit → **Re-run all jobs**. O en el VPS, como root:
+`bash /opt/toga-app/repo/deploy/auto-deploy.sh sha-ANTERIOR`. Ojo: las migraciones no se deshacen solas;
+si la versión nueva cambió la base, restaura también el respaldo (`restore.sh --replace`).
+
+### Si Easypanel se reinstala o se cambia el compose
+
+La línea `image:` de `toga-app` debe ser `ghcr.io/gurdiny/admini-toga:produccion` (`render.sh` ya la genera
+así). Si es otra, `auto-deploy.sh` se niega a desplegar y lo dice. El **Deploy** de Easypanel sigue
+sirviendo: recrea con lo que apunte `:produccion`.
 
 Para liberar disco, de vez en cuando: `docker image prune -a --filter "until=720h"` (borra imágenes sin
 usar de más de 30 días; la que está corriendo no se toca).
