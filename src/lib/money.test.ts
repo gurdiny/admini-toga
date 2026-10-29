@@ -29,6 +29,13 @@ describe("sumas exactas", () => {
   it("toDecimal lanza con montos inválidos", () => {
     expect(() => toDecimal("doce")).toThrow();
     expect(() => toDecimal(Number.NaN)).toThrow();
+    expect(() => toDecimal("--50")).toThrow();
+  });
+
+  it("toDecimal acepta saldos calculados negativos (estado de cuenta)", () => {
+    expect(toDecimal("-1500.00").toFixed(2)).toBe("-1500.00");
+    expect(moneyToString(toDecimal("-0.50"))).toBe("-0.50");
+    expect(() => formatMXN("-1500.00")).not.toThrow();
   });
 });
 

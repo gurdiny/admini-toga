@@ -33,9 +33,12 @@ export function toDecimal(value: MoneyInput): Decimal {
     if (!Number.isFinite(value)) throw new Error(`Monto inválido: ${value}`);
     return new Decimal(value);
   }
-  const parsed = parseMoney(value);
+  // parseMoney rechaza negativos (es para lo que se captura), pero aquí
+  // también llegan saldos calculados que pueden ser negativos: "-1500.00".
+  const negative = value.trim().startsWith("-");
+  const parsed = parseMoney(negative ? value.trim().slice(1) : value);
   if (!parsed) throw new Error(`Monto inválido: "${value}"`);
-  return parsed;
+  return negative ? parsed.neg() : parsed;
 }
 
 export function sumDecimals(values: readonly MoneyInput[]): Decimal {
