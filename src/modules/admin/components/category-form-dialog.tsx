@@ -16,6 +16,8 @@ type Props = {
   type: CategoryType;
   /** Con `category` edita; sin ella, crea. */
   category?: { id: string; name: string; color: string };
+  /** Al crear: para elegirla ahí mismo (p. ej. en el formulario de pago). */
+  onCreated?: (category: { id: string; name: string; color: string }) => void;
   trigger?: React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -35,10 +37,17 @@ export function CategoryFormDialog({ trigger, open, onOpenChange, ...props }: Pr
   );
 }
 
-function CategoryForm({ type, category, onDone }: Omit<Props, "trigger" | "open" | "onOpenChange"> & { onDone: () => void }) {
+function CategoryForm({ type, category, onCreated, onDone }: Omit<Props, "trigger" | "open" | "onOpenChange"> & { onDone: () => void }) {
   const [name, setName] = useState(category?.name ?? "");
   const [color, setColor] = useState(category?.color ?? CATEGORY_COLORS[0]);
-  const create = useAction(createCategory, { errorToast: false, success: (c) => `Categoría «${c.name}» creada.`, onSuccess: onDone });
+  const create = useAction(createCategory, {
+    errorToast: false,
+    success: (c) => `Categoría «${c.name}» creada.`,
+    onSuccess: (c) => {
+      onCreated?.(c);
+      onDone();
+    },
+  });
   const update = useAction(updateCategory, { errorToast: false, success: "Categoría actualizada.", onSuccess: onDone });
   const action = category ? update : create;
   const errors = action.fieldErrors;

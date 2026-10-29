@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Check, ClipboardList, X } from "lucide-react";
+import { Check, ClipboardList, Plus, X } from "lucide-react";
 import { EntityPicker } from "@/components/form/entity-picker";
 import { Field, FormError } from "@/components/form/field";
 import { DayInput } from "@/components/form/day-input";
@@ -16,7 +16,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAction } from "@/hooks/use-action";
 import { formatCode, parseCode } from "@/lib/codes";
 import { formatDay, getToday } from "@/lib/date";
@@ -28,12 +28,15 @@ import type { PaymentMethod } from "@/generated/prisma/browser";
 import { loadDebtsForPayment } from "../actions/debts";
 import { createPayment, updatePayment } from "../actions/payments";
 import { LABOR_LABEL, METAL_LABEL, type ChargeKey } from "../charges";
+import { CategoryFormDialog } from "@/modules/admin/components/category-form-dialog";
 import { PAYMENT_METHOD_LABELS } from "../labels";
 import { SplitAmountFields, type SplitValues } from "./split-amount-fields";
 import type { CaptureOptions, DebtSummary, PaymentOrderRef } from "../queries";
 import { SupplierFormDialog } from "./supplier-form-dialog";
 
 const CONTADO = "contado";
+/** Último renglón de la lista de categorías: abre el alta en vez de elegir. */
+const NEW_CATEGORY = "__nueva__";
 
 export type PaymentFormValues = {
   id: string;
@@ -121,8 +124,10 @@ function PaymentForm({
   const [showCurrency, setShowCurrency] = useState(() => (payment?.currency ?? options.defaults.currency) !== "MXN");
   const set = <K extends keyof Values>(key: K, value: Values[K]) => setValues((v) => ({ ...v, [key]: value }));
 
-  // Proveedores: los del servidor + los creados aquí mismo.
+  // Proveedores y categorías: los del servidor + los creados aquí mismo.
   const [suppliers, setSuppliers] = useState(options.suppliers);
+  const [categories, setCategories] = useState(options.paymentCategories);
+  const [creatingCategory, setCreatingCategory] = useState(false);
   const [debts, setDebts] = useState<DebtSummary[] | null>(null);
   const [loadingDebts, startLoadingDebts] = useTransition();
 
@@ -330,17 +335,27 @@ function PaymentForm({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Categoría" htmlFor="p-category" required error={errors.categoryId}>
-              <Select value={values.categoryId} onValueChange={(v) => set("categoryId", v)}>
+              <Select
+                value={values.categoryId}
+                // "" lo manda el <select> oculto de Radix cuando la categoría recién creada
+                // todavía no está entre sus opciones: borraría la que se acaba de elegir.
+                onValueChange={(v) => (v === NEW_CATEGORY ? setCreatingCategory(true) : v && set("categoryId", v))}
+              >
                 <SelectTrigger id="p-category" className="h-11 w-full" aria-invalid={!!errors.categoryId}>
                   <SelectValue placeholder="Elige una categoría" />
                 </SelectTrigger>
                 <SelectContent>
-                  {options.paymentCategories.map((c) => (
+                  {categories.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       <span className="size-2.5 rounded-full" style={{ backgroundColor: c.color }} aria-hidden />
                       {c.name}
                     </SelectItem>
                   ))}
+                  <SelectSeparator />
+                  <SelectItem value={NEW_CATEGORY} className="text-toga-pink-strong font-bold">
+                    <Plus className="text-toga-pink-strong" aria-hidden />
+                    Agregar categoría
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </Field>
@@ -373,6 +388,17 @@ function PaymentForm({
             {action.pending ? "Guardando…" : isEdit ? "Guardar cambios" : "Registrar pago"}
           </Button>
         </DialogFooter>
+
+        {/* Fuera del <form>: el submit del alta no debe llegar al del pago. */}
+        <CategoryFormDialog
+          type="PAYMENT"
+          open={creatingCategory}
+          onOpenChange={setCreatingCategory}
+          onCreated={(c) => {
+            setCategories((list) => [...list, c]);
+            set("categoryId", c.id);
+          }}
+        />
     </>
   );
 }

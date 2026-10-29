@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardCheck, Home, LogOut, Menu, Plus, Settings, Truck, Wallet } from "lucide-react";
+import { ClipboardCheck, Home, LogOut, Menu, Plus, Settings, Tags, Truck, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { logout } from "@/lib/auth/actions";
@@ -33,12 +33,19 @@ const HOME = { href: "/", label: "Inicio", icon: Home } as const;
 const REMINDERS = { href: "/recordatorios", label: "Recordatorios", icon: ClipboardCheck } as const;
 const PAYMENTS = { href: "/pagos", label: "Pagos", icon: Wallet } as const;
 const SUPPLIERS = { href: "/proveedores", label: "Proveedores", icon: Truck } as const;
-const MAIN_LINKS = [HOME, REMINDERS, PAYMENTS, SUPPLIERS] as const;
+const CATEGORIES = { href: "/categorias", label: "Categorías", icon: Tags } as const;
+const MAIN_LINKS = [HOME, REMINDERS, PAYMENTS, SUPPLIERS, CATEGORIES] as const;
+const PAYMENT_LINKS: readonly string[] = [PAYMENTS.href, SUPPLIERS.href, CATEGORIES.href];
 
-/** Enlaces de los módulos encendidos en Configuración. Proveedores es parte de Pagos. */
+/** Enlaces de los módulos encendidos en Configuración. Proveedores y Categorías son parte de Pagos. */
 function visibleLinks(modules: Modules) {
-  return MAIN_LINKS.filter((link) => (link === REMINDERS ? modules.reminders : link === PAYMENTS || link === SUPPLIERS ? modules.payments : true));
+  return MAIN_LINKS.filter((link) =>
+    link === REMINDERS ? modules.reminders : PAYMENT_LINKS.includes(link.href) ? modules.payments : true,
+  );
 }
+
+/** Pantallas que en celular solo se abren desde «Menú»: ahí se marca la pestaña. */
+const inMenu = (pathname: string) => pathname === "/" || isActive(pathname, "/admin") || isActive(pathname, CATEGORIES.href);
 
 const ADMIN_LINK = { href: "/admin", label: "Administración", icon: Settings } as const;
 
@@ -58,7 +65,7 @@ export function TopNav({ isOwner, modules, reminders }: { isOwner: boolean; modu
           href={link.href}
           aria-current={isActive(pathname, link.href) ? "page" : undefined}
           className={cn(
-            "hover:bg-muted rounded-full px-4 py-2",
+            "hover:bg-muted rounded-full px-3 py-2 lg:px-4",
             isActive(pathname, link.href) && "bg-toga-green-soft font-bold",
           )}
         >
@@ -128,10 +135,10 @@ export function BottomNav({ isOwner, modules, reminders, userName, options, defa
               onClick={() => setMenuOpen(true)}
               className={cn(
                 "flex h-16 w-full flex-col items-center justify-center gap-1 text-[11px] tracking-tight",
-                isActive(pathname, "/admin") || pathname === "/" ? "text-foreground font-bold" : "text-muted-foreground",
+                inMenu(pathname) ? "text-foreground font-bold" : "text-muted-foreground",
               )}
             >
-              <TabIcon icon={Menu} active={isActive(pathname, "/admin") || pathname === "/"} />
+              <TabIcon icon={Menu} active={inMenu(pathname)} />
               <span className="block max-w-full truncate px-0.5">Menú</span>
             </button>
           </li>

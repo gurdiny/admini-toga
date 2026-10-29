@@ -9,7 +9,8 @@ import { chargesLabel } from "@/modules/payments/charges";
 import { cn } from "@/lib/utils";
 import { AdminTable, type AdminColumn } from "@/modules/admin/components/admin-table";
 import { CategoryRowActions, NewCategoryButton, SupplierActiveButton } from "@/modules/admin/components/catalog-actions";
-import { listCategories, type CategoryRow } from "@/modules/admin/queries";
+import { categoryColumns } from "@/modules/admin/components/category-columns";
+import { listCategories } from "@/modules/admin/queries";
 import { listSuppliers, type SupplierListItem } from "@/modules/payments/queries";
 
 export const metadata: Metadata = { title: "Catálogos" };
@@ -20,21 +21,6 @@ const TABS = [
   { value: "proveedores", label: "Proveedores" },
 ] as const;
 type Tab = (typeof TABS)[number]["value"];
-
-const categoryColumns: AdminColumn<CategoryRow>[] = [
-  {
-    header: "Categoría",
-    mobile: "title",
-    cell: (c) => (
-      <span className="inline-flex items-center gap-2">
-        <span className="size-3 shrink-0 rounded-full" style={{ backgroundColor: c.color }} aria-hidden />
-        {c.name}
-        {!c.isActive && <Badge variant="outline">Desactivada</Badge>}
-      </span>
-    ),
-  },
-  { header: "En uso", cell: (c) => (c.usage ? `${c.usage} registro${c.usage === 1 ? "" : "s"}` : "Sin usar") },
-];
 
 const supplierColumns: AdminColumn<SupplierListItem>[] = [
   {

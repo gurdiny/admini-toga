@@ -5,7 +5,7 @@
 // Deja capturas en e2e/screenshots/layout-<ancho>-<pantalla>.png
 const { launchBrowser, B, shots, log } = require("./config.cjs");
 
-const WIDTHS = [360, 375, 390, 600, 768, 1280];
+const WIDTHS = (process.env.E2E_WIDTHS ?? "360,375,390,600,768,1280").split(",").map(Number);
 /** Día de hoy en México (yyyy-MM-dd). */
 const TODAY = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City" }).format(new Date());
 const PAGES = [
@@ -15,6 +15,7 @@ const PAGES = [
   ["recordatorios-busqueda", "/recordatorios?q=a"],
   ["pagos", "/pagos"],
   ["proveedores", "/proveedores"],
+  ["categorias", "/categorias"],
   ["admin", "/admin"],
   ["admin-catalogos", "/admin/catalogos"],
   ["admin-clientes", "/admin/clientes"],
@@ -45,6 +46,18 @@ const DIALOGS = [
       await d.getByLabel("Mano de obra", { exact: true }).fill("50");
     },
   ],
+  // La lista de categorías del pago, con «Agregar categoría» al final…
+  ["pago-categorias", "/pagos", async (p) => {
+    await p.getByRole("button", { name: "Registrar pago" }).locator("visible=true").first().click();
+    await p.getByRole("dialog", { name: "Registrar pago" }).getByRole("combobox", { name: /^Categoría/ }).click();
+  }, { role: "listbox" }],
+  // …y el alta que abre encima del pago.
+  ["pago-nueva-categoria", "/pagos", async (p) => {
+    await p.getByRole("button", { name: "Registrar pago" }).locator("visible=true").first().click();
+    await p.getByRole("dialog", { name: "Registrar pago" }).getByRole("combobox", { name: /^Categoría/ }).click();
+    await p.getByRole("option", { name: "Agregar categoría" }).click();
+    await p.getByRole("dialog", { name: "Nueva categoría de pago" }).waitFor();
+  }],
   ["nuevo-proveedor", "/proveedores", (p) => p.getByRole("button", { name: "Nuevo proveedor" }).locator("visible=true").first().click()],
   // Alta de proveedor con «Ya le debo»: el saldo inicial también va por renglón.
   ["nuevo-proveedor-con-saldo", "/proveedores", async (p) => {
@@ -78,6 +91,7 @@ const DIALOGS = [
   }],
   ["pago-de-pedido", "CLIENTE", (p) => p.getByRole("button", { name: "Registrar pago de este pedido" }).first().click()],
   ["nueva-categoria", "/admin/catalogos", (p) => p.getByRole("button", { name: "Nueva categoría" }).click()],
+  ["nueva-categoria-categorias", "/categorias", (p) => p.getByRole("button", { name: "Nueva categoría" }).click()],
   ["nuevo-usuario", "/admin/usuarios", (p) => p.getByRole("button", { name: "Nuevo usuario" }).click()],
   ["filtros-auditoria-calendario", "/admin/auditoria", (p) => p.getByLabel("Desde").click()],
   // Solo en celular: el menú de la barra inferior.
@@ -177,6 +191,8 @@ function audit(mobile) {
         // El mostrador no ve totales: Inicio y la ficha del cliente sin montos generales.
         ["inicio-mostrador", "/api/dev/login?as=mostrador@joyeria.local&next=/"],
         ["cliente-mostrador", clientHref],
+        // Categorías de pago: el mostrador también las agrega y las quita.
+        ["categorias-mostrador", "/categorias"],
       ];
       for (const [label, path] of pages) {
         await page.goto(`${B}${path}`);

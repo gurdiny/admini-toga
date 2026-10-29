@@ -6,7 +6,7 @@
 // recordatorios. El DUEÑO (OWNER) puede todo eso y además ve los totales
 // generales y administra (catálogos, usuarios, auditoría, papelera, ajustes).
 
-import type { Role } from "@/generated/prisma/browser";
+import type { CategoryType, Role } from "@/generated/prisma/browser";
 import { dayInTZ, getToday } from "@/lib/date";
 
 type Actor = { id: string; role: Role };
@@ -25,6 +25,15 @@ export const canAdminister = isOwner;
 
 /** Capturar y editar pagos, abonos, adeudos, proveedores, clientes y recordatorios. */
 export const canCapture = (user: Actor) => user.role === "OWNER" || user.role === "STAFF";
+
+/**
+ * Categorías de pago (Anillos, Aretes…): las agrega, edita, ordena, desactiva
+ * y activa cualquiera que capture (decisión de Gera): si al registrar un pago
+ * falta una, el mostrador la agrega ahí mismo. Nunca se borran, solo se
+ * desactivan. Los tipos de proveedor siguen siendo del dueño.
+ */
+export const canManageCategories = (user: Actor, type: CategoryType) =>
+  type === "PAYMENT" ? canCapture(user) : isOwner(user);
 
 /**
  * Mandar a la papelera un pago, adeudo o recordatorio.

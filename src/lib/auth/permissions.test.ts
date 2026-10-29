@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canAdminister, canCapture, canDelete, canEdit, canReschedule, canViewTotals } from "./permissions";
+import { canAdminister, canCapture, canDelete, canEdit, canManageCategories, canReschedule, canViewTotals } from "./permissions";
 
 const owner = { id: "o", role: "OWNER" as const };
 const staff = { id: "s", role: "STAFF" as const };
@@ -12,6 +12,13 @@ describe("permisos", () => {
     expect(canViewTotals(owner)).toBe(true);
     expect(canAdminister(staff)).toBe(false);
     expect(canAdminister(owner)).toBe(true);
+  });
+
+  it("categorías de pago: ambos; tipos de proveedor: solo el dueño", () => {
+    expect(canManageCategories(staff, "PAYMENT")).toBe(true);
+    expect(canManageCategories(owner, "PAYMENT")).toBe(true);
+    expect(canManageCategories(staff, "SUPPLIER")).toBe(false);
+    expect(canManageCategories(owner, "SUPPLIER")).toBe(true);
   });
 
   describe("borrar", () => {

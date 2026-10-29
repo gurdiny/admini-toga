@@ -36,7 +36,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           <TopNav isOwner={isOwner} modules={settings.modules} reminders={reminders} />
           <div className="ml-auto flex items-center gap-2">
             <GlobalSearch />
-            <span className="hidden text-sm md:inline">{user.name}</span>
+            {/* Desde lg: en tablet no cabe junto a los enlaces (la insignia de abajo dice el rol). */}
+            <span className="hidden text-sm lg:inline">{user.name}</span>
             <Badge variant="secondary" className={isOwner ? "bg-toga-green-soft text-toga-green-strong" : undefined}>
               {isOwner ? "Dueño" : "Mostrador"}
             </Badge>
