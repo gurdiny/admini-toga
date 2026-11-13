@@ -10,6 +10,11 @@ const E2E_EMAIL = "empleado.e2e@joyeria.local";
   const browser = await launchBrowser();
   const page = await (await browser.newContext(MOBILE)).newPage();
   page.setDefaultTimeout(15000);
+  // El ➕ de la barra de abajo pregunta primero qué tipo de pago (celular).
+  const openSupplierPayment = async () => {
+    await page.getByRole("button", { name: "Nuevo pago" }).click();
+    await page.getByRole("dialog", { name: "Nuevo pago" }).getByRole("button", { name: /^Pago a proveedor/ }).click();
+  };
   const go = async (path) => {
     await page.goto(`${B}${path}`);
     await page.waitForLoadState("networkidle"); // que React hidrate antes de hacer clic
@@ -61,7 +66,7 @@ const E2E_EMAIL = "empleado.e2e@joyeria.local";
 
     // Un pago con esa categoría, luego se desactiva
     await go("/pagos");
-    await page.getByRole("button", { name: "Registrar pago" }).locator("visible=true").first().click();
+    await openSupplierPayment();
     dialog = page.getByRole("dialog", { name: "Registrar pago" });
     await dialog.getByLabel("Proveedor").fill("Taller de Engaste");
     await dialog.getByRole("button", { name: /^Taller de Engaste/ }).first().click();
@@ -83,7 +88,7 @@ const E2E_EMAIL = "empleado.e2e@joyeria.local";
 
     await go("/pagos");
     log(await page.locator("li", { hasText: "E2E con categoría nueva" }).getByText("Plata E2E").isVisible(), "El pago histórico sigue mostrando «Plata E2E»");
-    await page.getByRole("button", { name: "Registrar pago" }).locator("visible=true").first().click();
+    await openSupplierPayment();
     dialog = page.getByRole("dialog", { name: "Registrar pago" });
     await dialog.getByLabel("Proveedor").fill("Taller de Engaste");
     await dialog.getByRole("button", { name: /^Taller de Engaste/ }).first().click();

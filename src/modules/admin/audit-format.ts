@@ -6,6 +6,7 @@ import { formatMoney } from "@/lib/money";
 
 export const ENTITY_LABELS: Record<string, string> = {
   SupplierPayment: "Pago",
+  OtherPayment: "Pago sin proveedor",
   SupplierDebt: "Adeudo",
   Supplier: "Proveedor",
   OrderReminder: "Recordatorio",
@@ -60,6 +61,7 @@ const FIELD_LABELS: Record<string, string> = {
   contactName: "Contacto",
   targetDate: "Para el día",
   targetTime: "Hora límite",
+  time: "Hora",
   priority: "Prioridad",
   isCompleted: "Completado",
   completedAt: "Completado el",

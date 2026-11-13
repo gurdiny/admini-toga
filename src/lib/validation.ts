@@ -100,12 +100,21 @@ export const zOptionalDay = z
   .optional()
   .transform((value) => (value ? value : null));
 
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** Hora "HH:mm" obligatoria (hora de México). */
+export const zTime = z
+  .string({ error: "Indica la hora." })
+  .trim()
+  .min(1, "Indica la hora.")
+  .refine((value) => TIME_PATTERN.test(value), "Hora no válida, usa formato 24 h, por ejemplo 17:30.");
+
 /** Hora "HH:mm" opcional (hora de México). */
 export const zOptionalTime = z
   .string()
   .nullish()
   .transform((value) => (value?.trim() ? value.trim() : null))
-  .refine((value) => value === null || /^([01]\d|2[0-3]):[0-5]\d$/.test(value), "Hora no válida, usa formato 24 h, por ejemplo 17:30.");
+  .refine((value) => value === null || TIME_PATTERN.test(value), "Hora no válida, usa formato 24 h, por ejemplo 17:30.");
 
 /** Teléfono de México opcional; se guarda con 10 dígitos. */
 export const zOptionalPhone = z

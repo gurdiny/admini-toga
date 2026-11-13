@@ -1,10 +1,12 @@
-// Códigos visibles de los registros: PROV-0001, ADE-0001, PAG-0001, CLI-0001.
+// Códigos visibles de los registros: PROV-0001, ADE-0001, PAG-0001, PSP-0001, CLI-0001.
 // El número es la columna `code` (autoincremental); el id interno no se muestra.
 
 export const CODE_PREFIX = {
   supplier: "PROV",
   debt: "ADE",
   payment: "PAG",
+  /** Pago sin proveedor. */
+  otherPayment: "PSP",
   /** Folio del cliente: lo asigna la base, nunca se repite. */
   client: "CLI",
 } as const;

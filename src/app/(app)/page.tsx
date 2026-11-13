@@ -5,12 +5,12 @@ import { Button } from "@/components/ui/button";
 import { canDelete, canEdit, canReschedule, canViewTotals } from "@/lib/auth/permissions";
 import { requireUser } from "@/lib/auth/session";
 import { formatDay, getRange, getToday } from "@/lib/date";
-import { formatMXN } from "@/lib/money";
+import { formatMXN, moneyToString, toDecimal } from "@/lib/money";
 import { getSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { CategoryChart } from "@/modules/dashboard/components/category-chart";
 import { BalanceText } from "@/modules/payments/components/balance-text";
-import { getPaymentsSummary } from "@/modules/payments/queries";
+import { getOtherPaymentsSummary, getPaymentsSummary } from "@/modules/payments/queries";
 import { BUCKET_LABELS, bucketHref } from "@/modules/reminders/buckets";
 import { ReminderList } from "@/modules/reminders/components/reminder-list";
 import { getReminderCounts, getReminders } from "@/modules/reminders/queries";
@@ -30,10 +30,11 @@ export default async function Home() {
   const now = new Date();
   const month = getRange("month", now);
 
-  const [counts, today, summary] = await Promise.all([
+  const [counts, today, summary, otherSummary] = await Promise.all([
     modules.reminders ? getReminderCounts(now) : null,
     modules.reminders ? getReminders("hoy", now) : null,
     showTotals ? getPaymentsSummary(month) : null,
+    showTotals ? getOtherPaymentsSummary(month) : null,
   ]);
   const monthName = formatDay(month.from, "MMMM");
 
@@ -118,13 +119,13 @@ export default async function Home() {
         </>
       )}
 
-      {summary && (
+      {summary && otherSummary && (
         <section aria-labelledby="mes" className="space-y-3">
           <div className="flex items-center justify-between gap-2">
             <h2 id="mes" className="font-bold first-letter:uppercase">
               {monthName}
             </h2>
-            <Link href="/pagos?rango=mes" className="text-toga-pink-strong inline-flex min-h-10 items-center gap-0.5 text-sm font-bold">
+            <Link href="/pagos?ver=todos&rango=mes" className="text-toga-pink-strong inline-flex min-h-10 items-center gap-0.5 text-sm font-bold">
               Pagos del mes
               <ChevronRight className="size-4" aria-hidden />
             </Link>
@@ -132,9 +133,19 @@ export default async function Home() {
           <div className="bg-card shadow-toga grid grid-cols-2 rounded-2xl">
             <div className="min-w-0 space-y-1 p-4">
               <p className="text-muted-foreground text-xs">Pagado en {monthName}</p>
-              <p className="font-heading truncate text-xl leading-tight tabular-nums">{formatMXN(summary.totalPaid)}</p>
+              {/* Todo lo que salió en el mes: a proveedores + sin proveedor, con el desglose abajo. */}
+              <p className="font-heading truncate text-xl leading-tight tabular-nums">
+                {formatMXN(moneyToString(toDecimal(summary.totalPaid).add(otherSummary.totalPaid)))}
+              </p>
               <p className="text-muted-foreground text-xs">
-                {summary.count} pago{summary.count === 1 ? "" : "s"}
+                {otherSummary.count > 0 ? (
+                  <>
+                    <span className="block tabular-nums">{formatMXN(summary.totalPaid)} a proveedores</span>
+                    <span className="block tabular-nums">{formatMXN(otherSummary.totalPaid)} sin proveedor</span>
+                  </>
+                ) : (
+                  `${summary.count} pago${summary.count === 1 ? "" : "s"}`
+                )}
               </p>
             </div>
             <div className="min-w-0 space-y-1 border-l p-4">
@@ -148,15 +159,21 @@ export default async function Home() {
 
           <div className="bg-card shadow-toga min-w-0 rounded-2xl p-4">
             <h3 className="mb-3 text-sm font-bold">Gasto por categoría</h3>
-            {summary.count === 0 ? (
+            {summary.count + otherSummary.count === 0 ? (
               <div className="text-muted-foreground flex flex-col items-center gap-2 py-6 text-center text-sm">
                 <Wallet className="size-6" aria-hidden />
                 Aún no hay pagos en {monthName}.
               </div>
             ) : (
               <CategoryChart
-                data={summary.byCategory.map((row) => ({ id: row.id, name: row.name, color: row.color ?? "", total: row.total, count: row.count }))}
-                total={summary.totalPaid}
+                data={[
+                  ...summary.byCategory.map((row) => ({ id: row.id, name: row.name, color: row.color ?? "", total: row.total, count: row.count })),
+                  // Lo que salió sin proveedor entra como una barra más (plata).
+                  ...(otherSummary.count > 0
+                    ? [{ id: "sin-proveedor", name: "Sin proveedor", color: "var(--plata-edge)", total: otherSummary.totalPaid, count: otherSummary.count }]
+                    : []),
+                ].sort((a, b) => toDecimal(b.total).comparedTo(toDecimal(a.total)))}
+                total={moneyToString(toDecimal(summary.totalPaid).add(otherSummary.totalPaid))}
               />
             )}
           </div>

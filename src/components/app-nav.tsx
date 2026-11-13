@@ -3,13 +3,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardCheck, Home, LogOut, Menu, Plus, Settings, Tags, Truck, Wallet } from "lucide-react";
+import { Banknote, ChevronRight, ClipboardCheck, Home, Layers, LogOut, Menu, Plus, Settings, Tags, Truck, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { logout } from "@/lib/auth/actions";
 import { cn } from "@/lib/utils";
 import { DevUserSwitch } from "@/lib/dev/dev-toolbar";
 import type { PaymentMethod } from "@/generated/prisma/browser";
+import { PAYMENT_VIEW_LABELS, viewHref, type PaymentView } from "@/modules/payments/filters";
+import { OtherPaymentFormDialog } from "@/modules/payments/components/other-payment-form-dialog";
 import { PaymentFormDialog } from "@/modules/payments/components/payment-form-dialog";
 import type { CaptureOptions } from "@/modules/payments/queries";
 
@@ -78,14 +80,25 @@ export function TopNav({ isOwner, modules, reminders }: { isOwner: boolean; modu
 }
 
 /**
- * Celular: barra fija abajo como la de toga.mx. En el centro, el botón para
- * registrar un pago desde cualquier pantalla (dentro de un proveedor, ya viene
- * con ese proveedor elegido). Inicio está en «Menú» y en el logo.
+ * Celular: barra fija abajo como la de toga.mx. «Pagos» abre el menú de sus
+ * tres listas. En el centro, el botón para registrar un pago desde cualquier
+ * pantalla: pregunta si es a un proveedor o sin proveedor (dentro de un
+ * proveedor, ya viene con ese proveedor elegido). Inicio está en «Menú» y en
+ * el logo.
  */
 export function BottomNav({ isOwner, modules, reminders, userName, options, defaultMethod, devEmail }: NavProps) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [paymentsOpen, setPaymentsOpen] = useState(false);
+  const [currentView, setCurrentView] = useState<PaymentView | null>(null);
   const supplierId = pathname.match(/^\/proveedores\/([^/]+)$/)?.[1];
+
+  function openPayments() {
+    // La lista actual se lee al abrir (sin useSearchParams, que obligaría a un Suspense en el layout).
+    const ver = new URLSearchParams(window.location.search).get("ver");
+    setCurrentView(pathname === PAYMENTS.href ? ((PAYMENT_VIEWS_MENU.some((v) => v.view === ver) ? ver : "proveedores") as PaymentView) : null);
+    setPaymentsOpen(true);
+  }
 
   return (
     <>
@@ -108,23 +121,28 @@ export function BottomNav({ isOwner, modules, reminders, userName, options, defa
           {modules.reminders && <TabLink {...REMINDERS} active={isActive(pathname, REMINDERS.href)} badge={reminders} />}
           {modules.payments && (
             <>
-              <TabLink {...PAYMENTS} active={isActive(pathname, PAYMENTS.href)} />
+              {/* «Pagos» abre el menú de las tres listas (a proveedores, sin proveedor, todos). */}
+              <li>
+                <button
+                  type="button"
+                  onClick={openPayments}
+                  aria-haspopup="dialog"
+                  className={cn(
+                    "flex h-16 w-full min-w-0 flex-col items-center justify-center gap-1 text-[10px] tracking-tight min-[380px]:text-[11px]",
+                    isActive(pathname, PAYMENTS.href) ? "text-foreground font-bold" : "text-muted-foreground",
+                  )}
+                >
+                  <TabIcon icon={PAYMENTS.icon} active={isActive(pathname, PAYMENTS.href)} />
+                  <span className="block max-w-full truncate px-0.5">{PAYMENTS.label}</span>
+                </button>
+              </li>
               <li className="flex justify-center">
-                <PaymentFormDialog
-                  key={supplierId ?? "general"}
-                  options={options}
-                  defaultMethod={defaultMethod}
-                  preset={supplierId ? { supplierId } : undefined}
-                  trigger={
-                    <button
-                      type="button"
-                      aria-label="Registrar pago"
-                      className="bg-toga-pink-strong shadow-toga-sm -mt-6 flex size-14 items-center justify-center rounded-full text-white ring-4 ring-[var(--background)] active:scale-95"
-                    >
-                      <Plus className="size-7" strokeWidth={2.5} aria-hidden />
-                    </button>
-                  }
-                />
+                {/* Dentro de un proveedor el pago ya es para él; en cualquier otra pantalla se pregunta. */}
+                {supplierId ? (
+                  <PaymentFormDialog key={supplierId} options={options} defaultMethod={defaultMethod} preset={{ supplierId }} trigger={<PlusButton />} />
+                ) : (
+                  <NewPaymentChooser options={options} defaultMethod={defaultMethod} />
+                )}
               </li>
               <TabLink {...SUPPLIERS} active={isActive(pathname, SUPPLIERS.href)} />
             </>
@@ -144,6 +162,37 @@ export function BottomNav({ isOwner, modules, reminders, userName, options, defa
           </li>
         </ul>
       </nav>
+
+      <Dialog open={paymentsOpen} onOpenChange={setPaymentsOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Pagos</DialogTitle>
+            <DialogDescription>¿Qué lista quieres ver?</DialogDescription>
+          </DialogHeader>
+          <ul className="divide-y rounded-2xl border">
+            {PAYMENT_VIEWS_MENU.map(({ view, icon: Icon, detail }) => {
+              const active = currentView === view;
+              return (
+                <li key={view}>
+                  <Link
+                    href={viewHref(view)}
+                    onClick={() => setPaymentsOpen(false)}
+                    aria-current={active ? "page" : undefined}
+                    className="flex min-h-14 items-center gap-3 px-4 py-2 text-sm"
+                  >
+                    <Icon className={cn("text-muted-foreground size-[18px] shrink-0", active && "text-toga-pink-strong")} aria-hidden />
+                    <span className="min-w-0 flex-1">
+                      <span className={cn("block", active && "font-bold")}>{PAYMENT_VIEW_LABELS[view].title}</span>
+                      <span className="text-muted-foreground block text-xs">{detail}</span>
+                    </span>
+                    <ChevronRight className="text-muted-foreground size-4 shrink-0" aria-hidden />
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={menuOpen} onOpenChange={setMenuOpen}>
         <DialogContent className="sm:max-w-sm">
@@ -176,6 +225,84 @@ export function BottomNav({ isOwner, modules, reminders, userName, options, defa
           </form>
         </DialogContent>
       </Dialog>
+    </>
+  );
+}
+
+const PAYMENT_VIEWS_MENU: { view: PaymentView; icon: typeof Home; detail: string }[] = [
+  { view: "proveedores", icon: Truck, detail: "Contado y abonos a sus notas" },
+  { view: "sin-proveedor", icon: Banknote, detail: "Solo cantidad, nota, día y hora" },
+  { view: "todos", icon: Layers, detail: "Los dos juntos" },
+];
+
+/** El botón rosa del centro. */
+function PlusButton(props: React.ComponentProps<"button">) {
+  return (
+    <button
+      type="button"
+      aria-label="Nuevo pago"
+      className="bg-toga-pink-strong shadow-toga-sm -mt-6 flex size-14 items-center justify-center rounded-full text-white ring-4 ring-[var(--background)] active:scale-95"
+      {...props}
+    >
+      <Plus className="size-7" strokeWidth={2.5} aria-hidden />
+    </button>
+  );
+}
+
+/**
+ * ➕ fuera de un proveedor: pregunta si el pago es a un proveedor o sin
+ * proveedor y abre el formulario que toca. Los formularios son diálogos
+ * aparte (no anidados): el que elige se cierra antes de abrir el otro.
+ */
+function NewPaymentChooser({ options, defaultMethod }: { options: CaptureOptions; defaultMethod: PaymentMethod }) {
+  const [choosing, setChoosing] = useState(false);
+  const [form, setForm] = useState<"supplier" | "other" | null>(null);
+  const choose = (next: "supplier" | "other") => {
+    setChoosing(false);
+    setForm(next);
+  };
+  const choices = [
+    { key: "supplier" as const, icon: Truck, title: "Pago a proveedor", detail: "De contado o abono a lo que se le debe" },
+    { key: "other" as const, icon: Banknote, title: "Pago sin proveedor", detail: "Solo cantidad y nota" },
+  ];
+
+  return (
+    <>
+      <PlusButton onClick={() => setChoosing(true)} aria-haspopup="dialog" />
+      <Dialog open={choosing} onOpenChange={setChoosing}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Nuevo pago</DialogTitle>
+            <DialogDescription>¿A quién le estás pagando?</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {choices.map(({ key, icon: Icon, title, detail }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => choose(key)}
+                className="bg-card hover:bg-muted flex min-h-16 w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left"
+              >
+                <span className="bg-toga-pink-soft text-toga-pink-strong flex size-10 shrink-0 items-center justify-center rounded-full" aria-hidden>
+                  <Icon className="size-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-bold">{title}</span>
+                  <span className="text-muted-foreground block text-xs">{detail}</span>
+                </span>
+                <ChevronRight className="text-muted-foreground size-4 shrink-0" aria-hidden />
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+      <PaymentFormDialog
+        open={form === "supplier"}
+        onOpenChange={(open) => !open && setForm(null)}
+        options={options}
+        defaultMethod={defaultMethod}
+      />
+      <OtherPaymentFormDialog open={form === "other"} onOpenChange={(open) => !open && setForm(null)} />
     </>
   );
 }

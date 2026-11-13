@@ -13,6 +13,7 @@ export const metadata: Metadata = { title: "Papelera" };
 const FILTERS: { value: TrashType | null; label: string }[] = [
   { value: null, label: "Todo" },
   { value: "pagos", label: "Pagos" },
+  { value: "sin-proveedor", label: "Pagos sin proveedor" },
   { value: "adeudos", label: "Adeudos" },
   { value: "recordatorios", label: "Recordatorios" },
   { value: "proveedores", label: "Proveedores" },

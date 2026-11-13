@@ -75,11 +75,12 @@ model User {
   sessions Session[]
   accounts Account[]
 
-  paymentsCreated    SupplierPayment[] @relation("PaymentCreatedBy")
-  debtsCreated       SupplierDebt[]    @relation("DebtCreatedBy")
-  remindersCreated   OrderReminder[]   @relation("ReminderCreatedBy")
-  remindersCompleted OrderReminder[]   @relation("ReminderCompletedBy")
-  auditLogs          AuditLog[]
+  paymentsCreated      SupplierPayment[] @relation("PaymentCreatedBy")
+  otherPaymentsCreated OtherPayment[]    @relation("OtherPaymentCreatedBy")
+  debtsCreated         SupplierDebt[]    @relation("DebtCreatedBy")
+  remindersCreated     OrderReminder[]   @relation("ReminderCreatedBy")
+  remindersCompleted   OrderReminder[]   @relation("ReminderCompletedBy")
+  auditLogs            AuditLog[]
 
   @@map("users")
 }
@@ -161,18 +162,18 @@ model Category {
 // Ningún dato de contacto es obligatorio: muchos proveedores no tienen
 // correo ni WhatsApp. Solo el nombre.
 model Supplier {
-  id           String   @id @default(cuid(2))
-  code         Int      @unique @default(autoincrement()) // se muestra como PROV-0001
+  id           String    @id @default(cuid(2))
+  code         Int       @unique @default(autoincrement()) // se muestra como PROV-0001
   name         String
-  nameKey      String   @unique
+  nameKey      String    @unique
   categoryId   String?
   // Qué se le paga a este proveedor: decide los renglones de su nota.
   // Al menos uno debe ser verdadero (CHECK en la migración).
-  chargesMetal Boolean  @default(false) // entrega plata
-  chargesLabor Boolean  @default(false) // hechura: engaste, soldadura, pulido, grabado
+  chargesMetal Boolean   @default(false) // entrega plata
+  chargesLabor Boolean   @default(false) // hechura: engaste, soldadura, pulido, grabado
   contactName  String? // persona con quien se trata
   phone        String? // 10 dígitos, normalizado
-  hasWhatsApp  Boolean  @default(false) // solo entonces se muestra el enlace a WhatsApp
+  hasWhatsApp  Boolean   @default(false) // solo entonces se muestra el enlace a WhatsApp
   email        String?
   address      String?
   notes        String?
@@ -287,6 +288,30 @@ model SupplierPayment {
   @@index([orderId])
   @@index([debtId])
   @@map("supplier_payments")
+}
+
+// Pago sin proveedor: dinero que sale sin que sea para un proveedor ni abone
+// a una nota (decisión de Gera). Solo lleva día, hora, monto y nota. Se ve
+// en /pagos?ver=sin-proveedor y, junto con los pagos a proveedores, en
+// /pagos?ver=todos.
+model OtherPayment {
+  id          String    @id @default(cuid(2))
+  code        Int       @unique @default(autoincrement()) // se muestra como PSP-0001
+  date        DateTime  @db.Date // día calendario de México
+  time        String    @db.Char(5) // "HH:mm" hora de México
+  amount      Decimal   @db.Decimal(12, 2) // > 0 (CHECK)
+  currency    String    @default("MXN") @db.Char(3)
+  note        String    @db.Text
+  createdById String
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  createdBy User @relation("OtherPaymentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([date])
+  @@index([deletedAt])
+  @@map("other_payments")
 }
 
 // Pedido de un cliente con fecha compromiso. Es el "pedido" al que se

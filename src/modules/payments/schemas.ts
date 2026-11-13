@@ -6,6 +6,7 @@ import {
   zCurrency,
   zDay,
   zId,
+  zMoney,
   zMoneyRow,
   zOptionalDay,
   zOptionalEmail,
@@ -13,6 +14,7 @@ import {
   zOptionalPhone,
   zOptionalText,
   zText,
+  zTime,
 } from "@/lib/validation";
 import { CHARGES_REQUIRED_MESSAGE, SPLIT_REQUIRED_MESSAGE } from "./charges";
 
@@ -156,6 +158,21 @@ export const updatePaymentSchema = paymentFields
   .refine(hasAmount, SPLIT_ISSUE)
   .transform(withTotal);
 
+// ─── Pago sin proveedor ────────────────────────────────────────────────────
+// Sin proveedor, sin nota de adeudo, sin categoría: día, hora, monto y nota.
+// Siempre en pesos (el campo `currency` existe en la tabla por si un día se
+// necesita otra moneda).
+
+const otherPaymentFields = z.object({
+  date: zDay,
+  time: zTime,
+  amount: zMoney,
+  note: zText("La nota", 500),
+});
+
+export const otherPaymentSchema = otherPaymentFields;
+export const updateOtherPaymentSchema = otherPaymentFields.extend({ id: zId("El pago") });
+
 export const idSchema = z.object({ id: zId() });
 
 /**
@@ -167,3 +184,4 @@ export const deleteSchema = z.object({ id: zId(), confirm: zCheckbox });
 export type SupplierInput = z.input<typeof supplierSchema>;
 export type DebtInput = z.input<typeof debtSchema>;
 export type PaymentInput = z.input<typeof paymentSchema>;
+export type OtherPaymentInput = z.input<typeof otherPaymentSchema>;

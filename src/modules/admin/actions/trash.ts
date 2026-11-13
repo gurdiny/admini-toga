@@ -55,6 +55,15 @@ export const restoreRecord = defineAction(
           return tx.supplierPayment.update({ where: { id }, data: { deletedAt: null } });
         },
       );
+    } else if (type === "sin-proveedor") {
+      await withAudit(
+        { userId: user.id, action: "RESTORE", entity: "OtherPayment", before: (tx) => tx.otherPayment.findUnique({ where: { id } }) },
+        async (tx) => {
+          const payment = await tx.otherPayment.findFirst({ where: { id, deletedAt: { not: null } } });
+          if (!payment) throw new BusinessError(GONE);
+          return tx.otherPayment.update({ where: { id }, data: { deletedAt: null } });
+        },
+      );
     } else if (type === "adeudos") {
       await withAudit(
         { userId: user.id, action: "RESTORE", entity: "SupplierDebt", before: (tx) => tx.supplierDebt.findUnique({ where: { id } }) },

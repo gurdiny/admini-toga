@@ -15,7 +15,8 @@ import {
   type BreakdownRow,
   type Split,
 } from "./aggregate";
-import { parseCode } from "@/lib/codes";
+import { formatCode, parseCode } from "@/lib/codes";
+import { mergeSorted, type MergeSort } from "./merge";
 import { getSettings } from "@/lib/settings";
 import type { PaymentMethod, Prisma } from "@/generated/prisma/client";
 
@@ -359,10 +360,13 @@ export type PaymentTrace = {
 
 const TRACE_FORMAT = "EEEE d 'de' MMMM 'de' yyyy, HH:mm:ss";
 
-async function paymentTraces(payments: { id: string; createdAt: Date; createdBy: { name: string } }[]): Promise<Map<string, PaymentTrace>> {
+async function paymentTraces(
+  payments: { id: string; createdAt: Date; createdBy: { name: string } }[],
+  entity: "SupplierPayment" | "OtherPayment" = "SupplierPayment",
+): Promise<Map<string, PaymentTrace>> {
   const edits = payments.length
     ? await db.auditLog.findMany({
-        where: { entity: "SupplierPayment", action: "UPDATE", entityId: { in: payments.map((p) => p.id) } },
+        where: { entity, action: "UPDATE", entityId: { in: payments.map((p) => p.id) } },
         orderBy: { createdAt: "desc" },
         include: { user: { select: { name: true } } },
       })
@@ -458,54 +462,59 @@ function paymentOrder(filters: PaymentFilters): Prisma.SupplierPaymentOrderByWit
 
 export async function getPayments(filters: PaymentFilters): Promise<{ items: PaymentListItem[]; total: number }> {
   const where = paymentWhere(filters);
-  const orderBy = paymentOrder(filters);
   const page = Math.max(1, filters.page ?? 1);
-
-  const [rows, total] = await Promise.all([
-    db.supplierPayment.findMany({
-      where,
-      orderBy,
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-      include: {
-        supplier: { select: { name: true } },
-        category: { select: { name: true, color: true } },
-        debt: { select: { code: true } },
-        createdBy: { select: { name: true } },
-        order: ORDER_SELECT,
-      },
-    }),
+  const [items, total] = await Promise.all([
+    fetchPaymentItems(where, paymentOrder(filters), (page - 1) * PAGE_SIZE, PAGE_SIZE),
     db.supplierPayment.count({ where }),
   ]);
+  return { items, total };
+}
+
+async function fetchPaymentItems(
+  where: Prisma.SupplierPaymentWhereInput,
+  orderBy: Prisma.SupplierPaymentOrderByWithRelationInput[],
+  skip: number,
+  take: number,
+): Promise<PaymentListItem[]> {
+  const rows = await db.supplierPayment.findMany({
+    where,
+    orderBy,
+    skip,
+    take,
+    include: {
+      supplier: { select: { name: true } },
+      category: { select: { name: true, color: true } },
+      debt: { select: { code: true } },
+      createdBy: { select: { name: true } },
+      order: ORDER_SELECT,
+    },
+  });
   const traces = await paymentTraces(rows);
 
-  return {
-    total,
-    items: rows.map((p) => ({
-      id: p.id,
-      code: p.code,
-      date: dbToDay(p.date),
-      concept: p.concept,
-      amount: moneyToString(p.amount),
-      amountMetal: moneyToString(p.amountMetal),
-      amountLabor: moneyToString(p.amountLabor),
-      currency: p.currency,
-      exchangeRate: p.exchangeRate?.toString() ?? null,
-      paymentMethod: p.paymentMethod,
-      supplierId: p.supplierId,
-      supplierName: p.supplier.name,
-      categoryId: p.categoryId,
-      categoryName: p.category.name,
-      categoryColor: p.category.color,
-      debtId: p.debtId,
-      debtCode: p.debt?.code ?? null,
-      order: toOrderRef(p.order),
-      createdById: p.createdById,
-      createdByName: p.createdBy.name,
-      createdAt: p.createdAt,
-      trace: traces.get(p.id)!,
-    })),
-  };
+  return rows.map((p) => ({
+    id: p.id,
+    code: p.code,
+    date: dbToDay(p.date),
+    concept: p.concept,
+    amount: moneyToString(p.amount),
+    amountMetal: moneyToString(p.amountMetal),
+    amountLabor: moneyToString(p.amountLabor),
+    currency: p.currency,
+    exchangeRate: p.exchangeRate?.toString() ?? null,
+    paymentMethod: p.paymentMethod,
+    supplierId: p.supplierId,
+    supplierName: p.supplier.name,
+    categoryId: p.categoryId,
+    categoryName: p.category.name,
+    categoryColor: p.category.color,
+    debtId: p.debtId,
+    debtCode: p.debt?.code ?? null,
+    order: toOrderRef(p.order),
+    createdById: p.createdById,
+    createdByName: p.createdBy.name,
+    createdAt: p.createdAt,
+    trace: traces.get(p.id)!,
+  }));
 }
 
 /** Tope de filas al exportar: un año de pagos de la joyería cabe de sobra. */
@@ -599,6 +608,238 @@ export async function getPaymentsSummary(range: DayRange): Promise<PaymentsSumma
   ]);
 
   return { ...summarizePayments(payments), totalOwed: totalBalances(balances.values()) };
+}
+
+// ─── Pagos sin proveedor ───────────────────────────────────────────────────
+
+export type OtherPaymentListItem = {
+  id: string;
+  code: number;
+  date: DayKey;
+  /** "HH:mm" hora de México. */
+  time: string;
+  amount: string;
+  currency: string;
+  note: string;
+  createdById: string;
+  createdByName: string;
+  createdAt: Date;
+  trace: PaymentTrace;
+};
+
+/** Sin proveedor no hay orden por proveedor: cae en fecha. */
+type OtherPaymentFilters = Pick<PaymentFilters, "range" | "search" | "sort" | "dir" | "page">;
+
+function otherPaymentWhere(filters: OtherPaymentFilters): Prisma.OtherPaymentWhereInput {
+  const where: Prisma.OtherPaymentWhereInput = { deletedAt: null, date: dayRangeWhere(filters.range) };
+  const query = filters.search?.trim();
+  if (query) {
+    const code = parseCode(query, "otherPayment");
+    where.OR = [{ note: { contains: query, mode: "insensitive" } }, ...(code !== null ? [{ code }] : [])];
+  }
+  return where;
+}
+
+function otherPaymentOrder(sort: MergeSort, dir: "asc" | "desc"): Prisma.OtherPaymentOrderByWithRelationInput[] {
+  return sort === "amount"
+    ? [{ amount: dir }, { date: "desc" }, { time: "desc" }, { code: "desc" }]
+    : [{ date: dir }, { time: dir }, { code: dir }];
+}
+
+const mergeSort = (sort: PaymentSort | undefined): MergeSort => (sort === "amount" ? "amount" : "date");
+
+async function fetchOtherPaymentItems(
+  where: Prisma.OtherPaymentWhereInput,
+  orderBy: Prisma.OtherPaymentOrderByWithRelationInput[],
+  skip: number,
+  take: number,
+): Promise<OtherPaymentListItem[]> {
+  const rows = await db.otherPayment.findMany({ where, orderBy, skip, take, include: { createdBy: { select: { name: true } } } });
+  const traces = await paymentTraces(rows, "OtherPayment");
+  return rows.map((p) => ({
+    id: p.id,
+    code: p.code,
+    date: dbToDay(p.date),
+    time: p.time,
+    amount: moneyToString(p.amount),
+    currency: p.currency,
+    note: p.note,
+    createdById: p.createdById,
+    createdByName: p.createdBy.name,
+    createdAt: p.createdAt,
+    trace: traces.get(p.id)!,
+  }));
+}
+
+export async function getOtherPayments(filters: OtherPaymentFilters): Promise<{ items: OtherPaymentListItem[]; total: number }> {
+  const where = otherPaymentWhere(filters);
+  const page = Math.max(1, filters.page ?? 1);
+  const [items, total] = await Promise.all([
+    fetchOtherPaymentItems(where, otherPaymentOrder(mergeSort(filters.sort), filters.dir ?? "desc"), (page - 1) * PAGE_SIZE, PAGE_SIZE),
+    db.otherPayment.count({ where }),
+  ]);
+  return { items, total };
+}
+
+export type OtherPaymentsSummary = { totalPaid: string; count: number };
+
+/** Solo para quien puede ver totales (canViewTotals). Siempre en pesos. */
+export async function getOtherPaymentsSummary(range: DayRange): Promise<OtherPaymentsSummary> {
+  const result = await db.otherPayment.aggregate({
+    where: { deletedAt: null, date: dayRangeWhere(range) },
+    _sum: { amount: true },
+    _count: { _all: true },
+  });
+  return { totalPaid: moneyToString(result._sum.amount ?? ZERO), count: result._count._all };
+}
+
+export type OtherPaymentExportRow = {
+  code: number;
+  date: DayKey;
+  time: string;
+  note: string;
+  currency: string;
+  amount: string;
+  createdByName: string;
+  createdAt: string;
+};
+
+export async function getOtherPaymentsForExport(filters: Omit<OtherPaymentFilters, "page">): Promise<OtherPaymentExportRow[]> {
+  const rows = await db.otherPayment.findMany({
+    where: otherPaymentWhere(filters),
+    orderBy: otherPaymentOrder(mergeSort(filters.sort), filters.dir ?? "desc"),
+    take: EXPORT_LIMIT,
+    include: { createdBy: { select: { name: true } } },
+  });
+  return rows.map((p) => ({
+    code: p.code,
+    date: dbToDay(p.date),
+    time: p.time,
+    note: p.note,
+    currency: p.currency,
+    amount: moneyToString(p.amount),
+    createdByName: p.createdBy.name,
+    createdAt: formatForDisplay(p.createdAt, "dd/MM/yyyy HH:mm"),
+  }));
+}
+
+// ─── Todos los pagos (con y sin proveedor) ─────────────────────────────────
+
+export type PaymentEntry =
+  | { kind: "supplier"; payment: PaymentListItem }
+  | { kind: "other"; payment: OtherPaymentListItem };
+
+/**
+ * Los dos tipos de pago en una sola lista. Cada tabla se pide ya ordenada y
+ * se intercalan en `mergeSorted`; para la página N basta con las primeras
+ * N × PAGE_SIZE filas de cada una. El mismo día, por hora (la del pago sin
+ * proveedor y la de captura del pago a proveedor).
+ */
+export async function getAllPayments(filters: OtherPaymentFilters): Promise<{ items: PaymentEntry[]; total: number }> {
+  const page = Math.max(1, filters.page ?? 1);
+  const sort = mergeSort(filters.sort);
+  const dir = filters.dir ?? "desc";
+  const supplierWhere = paymentWhere({ range: filters.range, search: filters.search });
+  const otherWhere = otherPaymentWhere(filters);
+  const supplierOrder: Prisma.SupplierPaymentOrderByWithRelationInput[] =
+    sort === "amount" ? [{ amount: dir }, { date: "desc" }, { createdAt: "desc" }] : [{ date: dir }, { createdAt: dir }];
+
+  const [suppliers, others, supplierTotal, otherTotal] = await Promise.all([
+    fetchPaymentItems(supplierWhere, supplierOrder, 0, page * PAGE_SIZE),
+    fetchOtherPaymentItems(otherWhere, otherPaymentOrder(sort, dir), 0, page * PAGE_SIZE),
+    db.supplierPayment.count({ where: supplierWhere }),
+    db.otherPayment.count({ where: otherWhere }),
+  ]);
+
+  const merged = mergeSorted(
+    suppliers,
+    others,
+    {
+      first: (p) => ({ date: p.date, time: formatForDisplay(p.createdAt, "HH:mm:ss"), amount: p.amount }),
+      second: (p) => ({ date: p.date, time: p.time, amount: p.amount }),
+    },
+    sort,
+    dir,
+    (page - 1) * PAGE_SIZE,
+    PAGE_SIZE,
+  );
+  return {
+    total: supplierTotal + otherTotal,
+    items: merged.map((entry) =>
+      entry.from === "first" ? { kind: "supplier" as const, payment: entry.item } : { kind: "other" as const, payment: entry.item },
+    ),
+  };
+}
+
+export type AllPaymentsExportRow = {
+  folio: string;
+  date: DayKey;
+  time: string | null;
+  supplierName: string | null;
+  concept: string;
+  categoryName: string | null;
+  paymentMethod: PaymentMethod | null;
+  type: string;
+  currency: string;
+  amount: string;
+  amountMXN: string;
+  createdByName: string;
+  createdAt: string;
+};
+
+/** Los dos tipos de pago en un solo archivo, en el mismo orden que la pantalla. */
+export async function getAllPaymentsForExport(filters: Omit<OtherPaymentFilters, "page">): Promise<AllPaymentsExportRow[]> {
+  const sort = mergeSort(filters.sort);
+  const dir = filters.dir ?? "desc";
+  const [suppliers, others] = await Promise.all([
+    getPaymentsForExport({ range: filters.range, search: filters.search, sort, dir }),
+    getOtherPaymentsForExport({ range: filters.range, search: filters.search, sort, dir }),
+  ]);
+  return mergeSorted(
+    suppliers,
+    others,
+    {
+      // "dd/MM/yyyy HH:mm": la hora de captura desempata el mismo día.
+      first: (p) => ({ date: p.date, time: p.createdAt.slice(-5), amount: p.amount }),
+      second: (p) => ({ date: p.date, time: p.time, amount: p.amount }),
+    },
+    sort,
+    dir,
+    0,
+    EXPORT_LIMIT,
+  ).map((entry) =>
+    entry.from === "first"
+      ? {
+          folio: formatCode("payment", entry.item.code),
+          date: entry.item.date,
+          time: null,
+          supplierName: entry.item.supplierName,
+          concept: entry.item.concept,
+          categoryName: entry.item.categoryName,
+          paymentMethod: entry.item.paymentMethod,
+          type: entry.item.debtCode ? `Abono a ${formatCode("debt", entry.item.debtCode)}` : "Contado",
+          currency: entry.item.currency,
+          amount: entry.item.amount,
+          amountMXN: entry.item.amountMXN,
+          createdByName: entry.item.createdByName,
+          createdAt: entry.item.createdAt,
+        }
+      : {
+          folio: formatCode("otherPayment", entry.item.code),
+          date: entry.item.date,
+          time: entry.item.time,
+          supplierName: null,
+          concept: entry.item.note,
+          categoryName: null,
+          paymentMethod: null,
+          type: "Sin proveedor",
+          currency: entry.item.currency,
+          amount: entry.item.amount,
+          amountMXN: entry.item.amount,
+          createdByName: entry.item.createdByName,
+          createdAt: entry.item.createdAt,
+        },
+  );
 }
 
 // ─── Opciones para formularios ─────────────────────────────────────────────

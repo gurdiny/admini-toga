@@ -142,12 +142,13 @@ export type AuditRow = {
   lines: ChangeLine[];
 };
 
-/** Nombre visible de cada id: pagos, adeudos, proveedores, clientes, categorías, usuarios, pedidos. */
+/** Nombre visible de cada id: pagos (con y sin proveedor), adeudos, proveedores, clientes, categorías, usuarios, pedidos. */
 async function labelsFor(ids: string[]): Promise<Lookup> {
   if (!ids.length) return {};
   const where = { id: { in: ids } };
-  const [payments, debts, suppliers, clients, categories, users, orders, settings] = await Promise.all([
+  const [payments, otherPayments, debts, suppliers, clients, categories, users, orders, settings] = await Promise.all([
     db.supplierPayment.findMany({ where, select: { id: true, code: true } }),
+    db.otherPayment.findMany({ where, select: { id: true, code: true } }),
     db.supplierDebt.findMany({ where, select: { id: true, code: true } }),
     db.supplier.findMany({ where, select: { id: true, name: true } }),
     db.client.findMany({ where, select: { id: true, name: true, code: true } }),
@@ -158,6 +159,7 @@ async function labelsFor(ids: string[]): Promise<Lookup> {
   ]);
   return Object.fromEntries([
     ...payments.map((p) => [p.id, formatCode("payment", p.code)]),
+    ...otherPayments.map((p) => [p.id, formatCode("otherPayment", p.code)]),
     ...debts.map((d) => [d.id, formatCode("debt", d.code)]),
     ...suppliers.map((s) => [s.id, s.name]),
     ...clients.map((c) => [c.id, `${c.name} (${formatCode("client", c.code)})`]),
@@ -214,6 +216,7 @@ export async function auditUsers() {
 
 export const TRASH_TYPES = {
   pagos: "SupplierPayment",
+  "sin-proveedor": "OtherPayment",
   adeudos: "SupplierDebt",
   recordatorios: "OrderReminder",
   proveedores: "Supplier",
@@ -236,10 +239,11 @@ export type TrashRow = {
 
 export async function listTrash(type?: TrashType): Promise<TrashRow[]> {
   const deleted = { deletedAt: { not: null } } as const;
-  const [payments, debts, reminders, suppliers, clients] = await Promise.all([
+  const [payments, otherPayments, debts, reminders, suppliers, clients] = await Promise.all([
     !type || type === "pagos"
       ? db.supplierPayment.findMany({ where: deleted, include: { supplier: { select: { name: true } }, debt: { select: { code: true } } } })
       : [],
+    !type || type === "sin-proveedor" ? db.otherPayment.findMany({ where: deleted }) : [],
     !type || type === "adeudos" ? db.supplierDebt.findMany({ where: deleted, include: { supplier: { select: { name: true } } } }) : [],
     !type || type === "recordatorios" ? db.orderReminder.findMany({ where: deleted, include: { client: { select: { name: true, code: true } } } }) : [],
     !type || type === "proveedores" ? db.supplier.findMany({ where: deleted }) : [],
@@ -248,7 +252,7 @@ export async function listTrash(type?: TrashType): Promise<TrashRow[]> {
   ]);
 
   // Quién lo borró: el último DELETE de la auditoría de cada registro.
-  const ids = [...payments, ...debts, ...reminders, ...suppliers, ...clients].map((r) => r.id);
+  const ids = [...payments, ...otherPayments, ...debts, ...reminders, ...suppliers, ...clients].map((r) => r.id);
   const logs = ids.length
     ? await db.auditLog.findMany({
         where: { action: "DELETE", entityId: { in: ids } },
@@ -266,6 +270,16 @@ export async function listTrash(type?: TrashType): Promise<TrashRow[]> {
       id: p.id,
       title: `${formatCode("payment", p.code)} · ${p.supplier.name}`,
       detail: `${p.concept}${p.debt ? ` · abono a ${formatCode("debt", p.debt.code)}` : ""} · ${formatDay(dbToDay(p.date), "d MMM yyyy")}`,
+      amount: formatMoney(p.amount, p.currency),
+      deletedAt: when(p.deletedAt!),
+      deletedBy: deletedBy.get(p.id) ?? null,
+      sortKey: p.deletedAt!.getTime(),
+    })),
+    ...otherPayments.map((p) => ({
+      type: "sin-proveedor" as const,
+      id: p.id,
+      title: `${formatCode("otherPayment", p.code)} · Sin proveedor`,
+      detail: `${p.note} · ${formatDay(dbToDay(p.date), "d MMM yyyy")}, ${p.time}`,
       amount: formatMoney(p.amount, p.currency),
       deletedAt: when(p.deletedAt!),
       deletedBy: deletedBy.get(p.id) ?? null,

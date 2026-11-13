@@ -23,9 +23,10 @@ export async function globalSearch(query: string, modules: Record<ModuleKey, boo
   const digits = q.replace(/\D/g, "");
   const clientCode = parseCode(q, "client");
   const paymentCode = parseCode(q, "payment");
+  const otherPaymentCode = parseCode(q, "otherPayment");
   const supplierCode = parseCode(q, "supplier");
 
-  const [clients, payments, suppliers] = await Promise.all([
+  const [clients, payments, otherPayments, suppliers] = await Promise.all([
     modules.reminders
       ? db.client.findMany({
           where: {
@@ -57,6 +58,18 @@ export async function globalSearch(query: string, modules: Record<ModuleKey, boo
           select: { id: true, code: true, date: true, concept: true, amount: true, currency: true, supplier: { select: { name: true } } },
         })
       : [],
+    // Pagos sin proveedor: por su nota o su folio (PSP-0001).
+    modules.payments
+      ? db.otherPayment.findMany({
+          where: {
+            deletedAt: null,
+            OR: [{ note: { contains: q, mode: "insensitive" } }, ...(otherPaymentCode !== null ? [{ code: otherPaymentCode }] : [])],
+          },
+          orderBy: [{ date: "desc" }, { time: "desc" }, { code: "desc" }],
+          take: TAKE,
+          select: { id: true, code: true, date: true, time: true, note: true, amount: true, currency: true },
+        })
+      : [],
     modules.payments
       ? db.supplier.findMany({
           where: {
@@ -86,12 +99,13 @@ export async function globalSearch(query: string, modules: Record<ModuleKey, boo
         detail: [formatCode("client", c.code), c.phone && formatPhone(c.phone)].filter(Boolean).join(" · "),
         href: `/clientes/${c.id}`,
       })),
-    payments: payments
-      .sort((a, b) => exact(a.code, paymentCode) - exact(b.code, paymentCode))
-      .map((p) => {
+    payments: [
+      ...payments.map((p) => {
         const day = dbToDay(p.date);
         const ref = formatCode("payment", p.code);
         return {
+          rank: exact(p.code, paymentCode),
+          day,
           id: p.id,
           title: `${p.supplier.name} · ${formatMoney(p.amount, p.currency)}`,
           detail: `${ref} · ${formatDay(day, "d MMM yyyy")} · ${p.concept}`,
@@ -99,6 +113,24 @@ export async function globalSearch(query: string, modules: Record<ModuleKey, boo
           href: `/pagos?rango=personalizado&desde=${day}&hasta=${day}&q=${ref}`,
         };
       }),
+      ...otherPayments.map((p) => {
+        const day = dbToDay(p.date);
+        const ref = formatCode("otherPayment", p.code);
+        return {
+          // «12» busca PAG-0012 y PSP-0012: el folio con su prefijo escrito gana.
+          rank: /^psp/i.test(q) ? exact(p.code, otherPaymentCode) - 1 : exact(p.code, otherPaymentCode),
+          day,
+          id: p.id,
+          title: `Sin proveedor · ${formatMoney(p.amount, p.currency)}`,
+          detail: `${ref} · ${formatDay(day, "d MMM yyyy")}, ${p.time} · ${p.note}`,
+          href: `/pagos?ver=sin-proveedor&rango=personalizado&desde=${day}&hasta=${day}&q=${ref}`,
+        };
+      }),
+    ]
+      // El folio exacto primero; luego lo más reciente.
+      .sort((a, b) => a.rank - b.rank || (a.day < b.day ? 1 : a.day > b.day ? -1 : 0))
+      .slice(0, TAKE)
+      .map(({ id, title, detail, href }) => ({ id, title, detail, href })),
     suppliers: suppliers
       .sort((a, b) => exact(a.code, supplierCode) - exact(b.code, supplierCode))
       .map((s) => ({

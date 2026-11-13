@@ -81,6 +81,6 @@ export const settingsSchema = z.object({
 export type SettingsInput = z.input<typeof settingsSchema>;
 
 export const restoreSchema = z.object({
-  type: z.enum(["pagos", "adeudos", "recordatorios", "proveedores", "clientes"]),
+  type: z.enum(["pagos", "sin-proveedor", "adeudos", "recordatorios", "proveedores", "clientes"]),
   id: zId(),
 });

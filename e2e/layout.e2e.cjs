@@ -14,6 +14,8 @@ const PAGES = [
   ["completados", "/recordatorios?vista=completados"],
   ["recordatorios-busqueda", "/recordatorios?q=a"],
   ["pagos", "/pagos"],
+  ["pagos-sin-proveedor", "/pagos?ver=sin-proveedor"],
+  ["pagos-todos", "/pagos?ver=todos"],
   ["proveedores", "/proveedores"],
   ["categorias", "/categorias"],
   ["admin", "/admin"],
@@ -25,17 +27,58 @@ const PAGES = [
   ["admin-papelera", "/admin/papelera"],
   ["404", "/esta-pagina-no-existe"],
 ];
+/** Abre la pregunta del ➕ (celular). */
+async function openChooser(p) {
+  await p.getByRole("button", { name: "Nuevo pago" }).click();
+  return p.getByRole("dialog", { name: "Nuevo pago" });
+}
+
+/**
+ * Espera a que React tome la página: un clic antes de hidratar se pierde, y
+ * con la máquina cargada «networkidle» no siempre basta.
+ */
+const hydrated = (page) =>
+  page.waitForFunction(() => {
+    const button = document.querySelector("main button, nav button");
+    return !button || Object.keys(button).some((key) => key.startsWith("__reactFiber"));
+  });
+
+/**
+ * Abre el formulario de pago a proveedor: en escritorio con el botón del
+ * encabezado; en celular con el ➕, que primero pregunta qué tipo de pago.
+ */
+async function openSupplierPayment(p) {
+  const direct = p.getByRole("button", { name: "Registrar pago" }).locator("visible=true");
+  if (await direct.count()) return direct.first().click();
+  await (await openChooser(p)).getByRole("button", { name: /^Pago a proveedor/ }).click();
+}
+
+/** Igual, para el pago sin proveedor. */
+async function openOtherPayment(p) {
+  const direct = p.getByRole("button", { name: "Pago sin proveedor", exact: true }).locator("visible=true");
+  if (await direct.count()) return direct.first().click();
+  await (await openChooser(p)).getByRole("button", { name: /^Pago sin proveedor/ }).click();
+}
+
 // Diálogos: [nombre, ruta, cómo abrirlo]
 const DIALOGS = [
   ["nuevo-recordatorio", "/recordatorios", (p) => p.getByRole("button", { name: "Nuevo recordatorio" }).locator("visible=true").first().click()],
   ["detalle", "/recordatorios?vista=completados", (p) => p.getByRole("button", { name: "Ver detalle" }).first().click()],
-  ["registrar-pago", "/pagos", (p) => p.getByRole("button", { name: "Registrar pago" }).locator("visible=true").first().click()],
+  ["registrar-pago", "/pagos", openSupplierPayment],
+  ["pago-sin-proveedor", "/pagos?ver=sin-proveedor", openOtherPayment],
+  ["detalle-pago-sin-proveedor", `/pagos?ver=sin-proveedor&rango=personalizado&desde=2020-01-01&hasta=${TODAY}`, async (p) => {
+    await p.getByRole("button", { name: /Opciones de PSP-/ }).locator("visible=true").first().click();
+    await p.getByRole("menuitem", { name: "Ver detalle" }).click();
+  }],
+  // Solo en celular: el ➕ pregunta qué tipo de pago y «Pagos» abre sus tres listas.
+  ["nuevo-pago-elegir", "/", openChooser, { mobileOnly: true }],
+  ["pagos-listas", "/", (p) => p.getByRole("button", { name: "Pagos", exact: true }).click(), { mobileOnly: true }],
   // Con un proveedor que debe: aparecen adeudos y «Liquidar» (aquí se desbordaba a 375 px).
   [
     "registrar-pago-con-adeudo",
     "/pagos",
     async (p) => {
-      await p.getByRole("button", { name: "Registrar pago" }).locator("visible=true").first().click();
+      await openSupplierPayment(p);
       const d = p.getByRole("dialog", { name: "Registrar pago" });
       await d.getByLabel("Proveedor").fill("Platería");
       await d.getByRole("button", { name: /^Platería/ }).first().click();
@@ -48,12 +91,12 @@ const DIALOGS = [
   ],
   // La lista de categorías del pago, con «Agregar categoría» al final…
   ["pago-categorias", "/pagos", async (p) => {
-    await p.getByRole("button", { name: "Registrar pago" }).locator("visible=true").first().click();
+    await openSupplierPayment(p);
     await p.getByRole("dialog", { name: "Registrar pago" }).getByRole("combobox", { name: /^Categoría/ }).click();
   }, { role: "listbox" }],
   // …y el alta que abre encima del pago.
   ["pago-nueva-categoria", "/pagos", async (p) => {
-    await p.getByRole("button", { name: "Registrar pago" }).locator("visible=true").first().click();
+    await openSupplierPayment(p);
     await p.getByRole("dialog", { name: "Registrar pago" }).getByRole("combobox", { name: /^Categoría/ }).click();
     await p.getByRole("option", { name: "Agregar categoría" }).click();
     await p.getByRole("dialog", { name: "Nueva categoría de pago" }).waitFor();
@@ -207,6 +250,7 @@ function audit(mobile) {
         const href = path === "CLIENTE" ? clientHref : path === "PROVEEDOR" ? supplierHref : path;
         await page.goto(`${B}${href}`);
         await page.waitForLoadState("networkidle");
+        await hydrated(page);
         await open(page);
         await page.getByRole(role).last().waitFor();
         await page.waitForTimeout(300); // animación de entrada

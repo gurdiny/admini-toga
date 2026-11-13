@@ -34,4 +34,23 @@ describe("filtros de /pagos en la URL", () => {
     expect(paymentsHref(f, {})).toBe("/pagos?rango=mes");
     expect(paymentsHref(f, { orden: "amount", dir: "asc", pagina: 2 })).toBe("/pagos?rango=mes&orden=amount&dir=asc&pagina=2");
   });
+
+  it("la lista: a proveedores por defecto, sin proveedor o todos", () => {
+    expect(parsePaymentFilters({}, sunday).ver).toBe("proveedores");
+    expect(parsePaymentFilters({ ver: "sin-proveedor" }, sunday).ver).toBe("sin-proveedor");
+    expect(parsePaymentFilters({ ver: "todos" }, sunday).ver).toBe("todos");
+    expect(parsePaymentFilters({ ver: "otra" }, sunday).ver).toBe("proveedores");
+  });
+
+  it("la lista viaja en la URL y no se pierde al cambiar el periodo", () => {
+    const f = parsePaymentFilters({ ver: "todos", rango: "mes" }, sunday);
+    expect(paymentsHref(f, { rango: "hoy" })).toBe("/pagos?ver=todos&rango=hoy");
+    expect(paymentsHref(parsePaymentFilters({ rango: "mes" }, sunday), { ver: "sin-proveedor" })).toBe("/pagos?ver=sin-proveedor&rango=mes");
+  });
+
+  it("sin proveedor no se ordena por proveedor", () => {
+    expect(parsePaymentFilters({ ver: "sin-proveedor", orden: "supplier" }, sunday).orden).toBe("date");
+    expect(parsePaymentFilters({ ver: "todos", orden: "supplier" }, sunday).orden).toBe("date");
+    expect(parsePaymentFilters({ orden: "supplier" }, sunday).orden).toBe("supplier");
+  });
 });

@@ -3,7 +3,7 @@
 Recorren la app en Chrome como lo haría una persona: dan de alta proveedores,
 registran adeudos y abonos, filtran pagos y revisan permisos de Dueño y Mostrador.
 
-Crean registros con «E2E» en el nombre o concepto. Úsalas solo en la base de desarrollo.
+Crean registros con «E2E» en el nombre, concepto o nota. Úsalas solo en la base de desarrollo.
 Lo que la interfaz no puede crear (un pedido capturado ayer) se prepara con `sql()`
 de `config.cjs`, que usa el `DATABASE_URL` de `.env`.
 
@@ -16,6 +16,7 @@ Chrome de Windows:
 npm run dev                         # en otra terminal, con DEV_AUTO_LOGIN en .env
 "/mnt/c/Program Files/nodejs/node.exe" "$(wslpath -w e2e/proveedores.e2e.cjs)"
 "/mnt/c/Program Files/nodejs/node.exe" "$(wslpath -w e2e/pagos.e2e.cjs)"
+"/mnt/c/Program Files/nodejs/node.exe" "$(wslpath -w e2e/sin-proveedor.e2e.cjs)"  # pagos sin proveedor, las 3 listas, ➕ y menú de Pagos en celular
 "/mnt/c/Program Files/nodejs/node.exe" "$(wslpath -w e2e/recordatorios.e2e.cjs)"   # en celular (390 px)
 "/mnt/c/Program Files/nodejs/node.exe" "$(wslpath -w e2e/admin.e2e.cjs)"           # panel de administración (dueño y mostrador)
 "/mnt/c/Program Files/nodejs/node.exe" "$(wslpath -w e2e/reportes.e2e.cjs)"        # búsqueda global, historial del cliente, exportar (celular)

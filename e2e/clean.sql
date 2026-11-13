@@ -22,3 +22,6 @@ DELETE FROM audit_logs WHERE "entityId" IN (SELECT id FROM users WHERE email LIK
 DELETE FROM sessions WHERE "userId" IN (SELECT id FROM users WHERE email LIKE '%e2e%');
 DELETE FROM accounts WHERE "userId" IN (SELECT id FROM users WHERE email LIKE '%e2e%');
 DELETE FROM users WHERE email LIKE '%e2e%';
+-- Pagos sin proveedor: nota con «E2E».
+DELETE FROM audit_logs WHERE "entityId" IN (SELECT id FROM other_payments WHERE note LIKE '%E2E%');
+DELETE FROM other_payments WHERE note LIKE '%E2E%';
